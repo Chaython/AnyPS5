@@ -57,10 +57,9 @@ jobs:
         shell: cmd
         run: cmake --build build --parallel 4
 
-      - name: Translation-layer smoke tests
-        continue-on-error: true
+      - name: Full Windows test suite
         shell: cmd
-        run: ctest --test-dir build --output-on-failure --timeout 120 -R "guest_dynamic_loader|windows_dependency_diagnostics|amd64_only_windows|windows_gui"
+        run: ctest --test-dir build --output-on-failure --timeout 120
 
       - name: Package Windows build
         shell: pwsh
