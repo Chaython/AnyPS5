@@ -153,7 +153,8 @@ int main(const int argc, char* argv[]) {
                 report << "\"" << jsonEscape(guestArtifacts[index].Path.string()) << "\"";
             }
             report << "]\n}\n";
-            fileWriter.Write(reportPath.string(), std::vector<std::uint8_t>(report.str().begin(), report.str().end()));
+            const auto reportText = report.str();
+            fileWriter.Write(reportPath.string(), std::vector<std::uint8_t>(reportText.begin(), reportText.end()));
             std::cout << "Compatibility report: " << reportPath.string() << '\n';
         }
 
