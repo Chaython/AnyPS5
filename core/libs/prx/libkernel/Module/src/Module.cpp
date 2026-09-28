@@ -3,13 +3,22 @@
 #include "SceTypes.hpp"
 #include "prx/libc/include/General.hpp"
 
+namespace {
+constexpr int KernelEsrch = static_cast<int>(0x80020003u);
+constexpr int KernelEfault = static_cast<int>(0x8002000Eu);
+constexpr int KernelEinval = static_cast<int>(0x80020016u);
+}
+
 extern "C" {
+void* APS5_VABI dlopen_sce_module_nid_no_patch(const char* path, int flags);
+void* APS5_VABI dlsym_nid_postfix(void* handle, const char* name);
+int APS5_VABI dlclose_nid_postfix(void* handle);
 
 int APS5_VABI sceKernelDlsym(KernelModule handle, const char* symbol, void** addr) {
- (void)handle;
- (void)symbol;
- (void)addr;
- NotImplemented_nid_no_patch(__func__);
+ if (!symbol || !addr) return KernelEfault;
+ void* found = dlsym_nid_postfix(reinterpret_cast<void*>(static_cast<std::intptr_t>(handle)), symbol);
+ if (!found) return KernelEsrch;
+ *addr = found;
  return 0;
 }
 
@@ -30,24 +39,24 @@ int APS5_VABI sceKernelGetModuleInfoFromAddr(uint64_t addr, int n, ModuleInfo* r
 }
 
 KernelModule APS5_VABI sceKernelLoadStartModule(const char* module_file_name, size_t args, const void* argp, uint32_t flags, const KernelLoadModuleOpt* opt, int* res) {
- (void)module_file_name;
  (void)args;
  (void)argp;
- (void)flags;
  (void)opt;
- (void)res;
- NotImplemented_nid_no_patch(__func__);
- return {};
+ if (!module_file_name) return static_cast<KernelModule>(KernelEfault);
+ if (flags != 0) return static_cast<KernelModule>(KernelEinval);
+ void* handle = dlopen_sce_module_nid_no_patch(module_file_name, 2);
+ if (!handle) return static_cast<KernelModule>(KernelEsrch);
+ if (res) *res = 0;
+ return static_cast<KernelModule>(reinterpret_cast<std::intptr_t>(handle));
 }
 
 int APS5_VABI sceKernelStopUnloadModule(KernelModule handle, size_t args, const void* argp, uint32_t flags, const KernelUnloadModuleOpt* opt, int* res) {
- (void)handle;
  (void)args;
  (void)argp;
- (void)flags;
  (void)opt;
- (void)res;
- NotImplemented_nid_no_patch(__func__);
+ if (flags != 0) return KernelEinval;
+ if (dlclose_nid_postfix(reinterpret_cast<void*>(static_cast<std::intptr_t>(handle))) != 0) return KernelEsrch;
+ if (res) *res = 0;
  return 0;
 }
 
