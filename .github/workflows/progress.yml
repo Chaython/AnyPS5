@@ -11,20 +11,34 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: progress-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   progress:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
-      - run: python3 tools/progress.py out
-      - uses: actions/upload-pages-artifact@v5
+
+      - name: Generate progress report
+        run: python3 tools/progress.py out
+
+      - name: Upload progress artifact
+        if: github.repository != 'boykopovar/AnyPS5'
+        uses: actions/upload-artifact@v7
+        with:
+          name: progress-${{ github.sha }}
+          path: out
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Pages artifact
+        if: github.repository == 'boykopovar/AnyPS5'
+        uses: actions/upload-pages-artifact@v5
         with:
           path: out
-      - id: deployment
+
+      - name: Deploy Pages
+        if: github.repository == 'boykopovar/AnyPS5'
+        id: deployment
         uses: actions/deploy-pages@v5
