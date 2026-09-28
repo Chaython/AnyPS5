@@ -25,6 +25,8 @@ Args ParseArgs(int argc, char* argv[]) {
             unusedFilterSpecified = true;
         } else if (arg == "--registry") {
             args.writeRegistry = true;
+        } else if (arg == "--compatibility-report") {
+            args.compatibilityReport = true;
         } else if (arg == "--rpath") {
             if (i + 1 >= argc)
                 throw std::runtime_error("--rpath requires a value");
@@ -58,7 +60,7 @@ Args ParseArgs(int argc, char* argv[]) {
 
     if (args.inputPath.empty() || args.outputPath.empty())
         throw std::runtime_error(
-            "Usage: relinker [--windows] [--windows-diagnostics] [--windows-gui] [--skip-syscall-check] [--skip-sce-module] [--to-intel] [unused-filter=0|1|2] [--registry] [--rpath <path>] [--lazy-binding] [--autorun] <input.elf> <output.elf>\n"
+            "Usage: relinker [--windows] [--windows-diagnostics] [--windows-gui] [--skip-syscall-check] [--skip-sce-module] [--to-intel] [unused-filter=0|1|2] [--registry] [--compatibility-report] [--rpath <path>] [--lazy-binding] [--autorun] <input.elf> <output.elf>\n"
             "Example: relinker input.elf output.elf"
         );
 
