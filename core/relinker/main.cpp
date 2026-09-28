@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -111,6 +112,50 @@ int main(const int argc, char* argv[]) {
         }
         fileWriter.Write(absPath, executableBytes);
         std::cout << "External prx references: " << result.RegistryEntries.size() << "\nOutput file: " << absPath << '\n';
+
+        if (args.compatibilityReport) {
+            const auto jsonEscape = [](const std::string& value) {
+                std::ostringstream escaped;
+                for (const unsigned char ch : value) {
+                    switch (ch) {
+                    case '\\': escaped << "\\\\"; break;
+                    case '"': escaped << "\\\""; break;
+                    case '\n': escaped << "\\n"; break;
+                    case '\r': escaped << "\\r"; break;
+                    case '\t': escaped << "\\t"; break;
+                    default:
+                        if (ch < 0x20) {
+                            constexpr char hex[] = "0123456789abcdef";
+                            escaped << "\\u00" << hex[ch >> 4] << hex[ch & 0xf];
+                        } else {
+                            escaped << static_cast<char>(ch);
+                        }
+                    }
+                }
+                return escaped.str();
+            };
+            const std::filesystem::path outputFs(absPath);
+            const auto reportPath = outputFs.parent_path() / (outputFs.filename().string() + ".compatibility.json");
+            std::ostringstream report;
+            report << "{\n"
+                   << "  \"schema_version\": 1,\n"
+                   << "  \"input\": \"" << jsonEscape(std::filesystem::absolute(args.inputPath).string()) << "\",\n"
+                   << "  \"output\": \"" << jsonEscape(absPath) << "\",\n"
+                   << "  \"target\": \"" << (args.toWindows ? "windows" : "linux") << "\",\n"
+                   << "  \"to_intel\": " << (args.toIntel ? "true" : "false") << ",\n"
+                   << "  \"intel_stub_count\": " << trampolines.size() << ",\n"
+                   << "  \"external_prx_references\": " << result.RegistryEntries.size() << ",\n"
+                   << "  \"sce_module_processing\": " << (!args.skipSceModule ? "true" : "false") << ",\n"
+                   << "  \"lazy_binding\": " << (args.lazyBinding ? "true" : "false") << ",\n"
+                   << "  \"guest_modules\": [";
+            for (std::size_t index = 0; index < guestArtifacts.size(); ++index) {
+                if (index != 0) report << ", ";
+                report << "\"" << jsonEscape(guestArtifacts[index].Path.string()) << "\"";
+            }
+            report << "]\n}\n";
+            fileWriter.Write(reportPath.string(), std::vector<std::uint8_t>(report.str().begin(), report.str().end()));
+            std::cout << "Compatibility report: " << reportPath.string() << '\n';
+        }
 
         if (args.autorun) return Cli::Autorun(absPath, args.toWindows);
 
