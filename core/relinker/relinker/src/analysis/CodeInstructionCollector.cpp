@@ -209,12 +209,50 @@ std::set<Domain::VirtualAddress> CodeInstructionCollector::Collect(const std::ve
             }
         }
     } while (roots.size() != previousRoots);
+    std::uint64_t previousAddress = 0;
     std::uint64_t previousEnd = 0;
     for (const auto address : instructions) {
-        if (address < previousEnd) throw Domain::RelinkerException("Code analysis: overlapping instruction boundaries", address);
+        if (address < previousEnd) {
+            bool supportedOverlap = false;
+            // Some SCE binaries use the compact two-byte thunk EB FF, whose
+            // branch target is the second byte of the instruction. Decoding at
+            // that target intentionally produces a different instruction
+            // stream (typically FF 25 ... for an indirect PLT jump). Keep the
+            // general overlap guard, but allow this exact control-flow pattern.
+            if (address == previousAddress + 1 && previousEnd == previousAddress + 2) {
+                for (const auto& header : headers) {
+                    if (header.Type != 1 || (header.Flags & 1) == 0 ||
+                        previousAddress < header.MappedAddress ||
+                        previousAddress - header.MappedAddress >= header.FileSize) {
+                        continue;
+                    }
+                    const auto offset = previousAddress - header.MappedAddress;
+                    if (header.FileSize - offset >= 2 &&
+                        bytes[header.Offset + offset] == 0xeb &&
+                        bytes[header.Offset + offset + 1] == 0xff) {
+                        const auto info = decoder.DecodeInstruction(
+                            bytes.data() + header.Offset + offset,
+                            header.FileSize - offset);
+                        supportedOverlap =
+                            info.Length == 2 &&
+                            info.FlowKind == Codegen::ControlFlowKind::UnconditionalJump &&
+                            info.HasBranchTarget &&
+                            !info.HasRipRelativeDisp &&
+                            static_cast<std::int64_t>(previousAddress + info.Length) +
+                                    info.BranchDisp ==
+                                static_cast<std::int64_t>(address);
+                    }
+                    break;
+                }
+            }
+            if (!supportedOverlap)
+                throw Domain::RelinkerException("Code analysis: overlapping instruction boundaries", address);
+        }
+
         for (const auto& header : headers) {
             if (header.Type != 1 || (header.Flags & 1) == 0 || address < header.MappedAddress || address - header.MappedAddress >= header.FileSize) continue;
             const auto offset = address - header.MappedAddress;
+            previousAddress = address;
             previousEnd = address + decoder.DecodeInstruction(bytes.data() + header.Offset + offset, header.FileSize - offset).Length;
             break;
         }
