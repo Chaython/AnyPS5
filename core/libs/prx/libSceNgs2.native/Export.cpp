@@ -31,10 +31,12 @@
 #include <thread>
 #include <unordered_set>
 #include <vector>
+#if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#endif
 #include "SceTypes.hpp"
 #include "prx/libc/include/General.hpp"
 
@@ -210,6 +212,7 @@ std::string Hex(const void* p, size_t n) {
     return s;
 }
 
+#if defined(_WIN32)
 bool Readable(const void* p, size_t n) {
     if (p == nullptr) return false;
     if (n == 0) return true;
@@ -224,6 +227,7 @@ bool Readable(const void* p, size_t n) {
     }
     return true;
 }
+
 bool Writable(void* p, size_t n) {
     if (p == nullptr) return false;
     if (n == 0) return true;
@@ -233,11 +237,62 @@ bool Writable(void* p, size_t n) {
     MEMORY_BASIC_INFORMATION mbi;
     while (c < end) {
         if (VirtualQuery(c, &mbi, sizeof(mbi)) == 0) return false;
-        if (mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD | PAGE_READONLY | PAGE_EXECUTE_READ | PAGE_EXECUTE)) || mbi.Protect == 0) return false;
+        if (mbi.State != MEM_COMMIT ||
+            (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD | PAGE_READONLY | PAGE_EXECUTE_READ | PAGE_EXECUTE)) ||
+            mbi.Protect == 0) {
+            return false;
+        }
         c = static_cast<uint8_t*>(mbi.BaseAddress) + mbi.RegionSize;
     }
     return true;
 }
+#else
+bool RangeAccessible(const void* p, size_t n, bool require_write) {
+    if (p == nullptr) return false;
+    if (n == 0) return true;
+
+    const auto begin = reinterpret_cast<std::uintptr_t>(p);
+    const auto end = begin + n;
+    if (end < begin) return false;
+
+    std::FILE* maps = std::fopen("/proc/self/maps", "r");
+    if (maps == nullptr) return false;
+
+    std::uintptr_t cursor = begin;
+    char line[512];
+    while (cursor < end && std::fgets(line, sizeof(line), maps) != nullptr) {
+        unsigned long long map_begin = 0;
+        unsigned long long map_end = 0;
+        char permissions[5] = {};
+        if (std::sscanf(line, "%llx-%llx %4s", &map_begin, &map_end, permissions) != 3) continue;
+
+        const auto region_begin = static_cast<std::uintptr_t>(map_begin);
+        const auto region_end = static_cast<std::uintptr_t>(map_end);
+        if (region_end <= cursor) continue;
+        if (region_begin > cursor) {
+            std::fclose(maps);
+            return false;
+        }
+        if (permissions[0] != 'r' || (require_write && permissions[1] != 'w')) {
+            std::fclose(maps);
+            return false;
+        }
+
+        cursor = region_end < end ? region_end : end;
+    }
+
+    std::fclose(maps);
+    return cursor >= end;
+}
+
+bool Readable(const void* p, size_t n) {
+    return RangeAccessible(p, n, false);
+}
+
+bool Writable(void* p, size_t n) {
+    return RangeAccessible(p, n, true);
+}
+#endif
 
 template <class T> T Rd(const uint8_t* p) { T v; std::memcpy(&v, p, sizeof(T)); return v; }
 
