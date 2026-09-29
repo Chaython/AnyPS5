@@ -66,6 +66,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist, dist\\libs | Out-Null
           Copy-Item build\\core\\relinker\\relinker.exe dist\\
+          Copy-Item build\\core\\relinker\\AnyPS5.exe dist\\
           Copy-Item build\\core\\libs\\libs\\*.prx dist\\libs\\
           Copy-Item C:\\winlibs\\mingw64\\bin\\libgcc_s_seh-1.dll dist\\libs\\
           Copy-Item C:\\winlibs\\mingw64\\bin\\libstdc++-6.dll dist\\libs\\
@@ -74,8 +75,10 @@ jobs:
           AnyPS5 Windows build
           Commit: ${{ github.sha }}
 
-          relinker.exe is built with the project's required WinLibs GCC 15.2 toolchain.
-          Put the contents of libs next to the relinked executable when running a translated title.
+          Double-click AnyPS5.exe for the graphical converter.
+          relinker.exe remains available for command-line use and is called by the GUI.
+          Keep AnyPS5.exe and relinker.exe together.
+          Put the contents of libs next to the relinked game executable when running a translated title.
           "@ | Set-Content dist\\README-Windows.txt
 
       - name: Upload Windows artifact
