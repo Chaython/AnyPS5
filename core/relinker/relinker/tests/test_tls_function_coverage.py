@@ -98,7 +98,10 @@ def main():
             convert(metadata + "-outside", make_image("register", metadata, 0x1000), "Code analysis: function exceeds executable segment")
         overlapping = make_image("register", "unwind")
         overlapping[0x1200:0x1205] = b"\xe9" + struct.pack("<i", 0x1245 - 0x1205)
-        convert("overlapping-entry", overlapping, "Code analysis: overlapping instruction boundaries")
+        convert("overlapping-entry", overlapping, "Branch enters a guest TLS instruction")
+        harmless_overlap = make_image("register", "unwind")
+        harmless_overlap[0x1210:0x1214] = bytes.fromhex("66 90 eb fd")
+        convert("overlapping-nontls-stream", harmless_overlap)
         external = make_image("register", "unwind")
         external[0x1300:0x1310] = external[0x1240:0x1250]
         external[0x1240:0x1250] = b"\xe8" + struct.pack("<i", 0x1300 - 0x1245) + b"\xc3" + b"\x90" * 10
