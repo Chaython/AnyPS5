@@ -39,6 +39,20 @@ std::string CanonicalImportProvider(const std::string& library) {
         normalized.replace(pos, 7u, ".native");
         pos += 7u;
     }
+
+    // PS5 eboots commonly name the concrete DT_NEEDED provider
+    // "libFoo.native.prx" while DT_SCE_IMPORT_LIB/NID metadata names the
+    // logical import module simply "libFoo".  The .native suffix selects
+    // AnyPS5's provider implementation; it is not a distinct guest ABI.
+    // Canonicalize both spellings to the logical module name for membership
+    // validation, while leaving the original DT_NEEDED filename untouched.
+    static constexpr char kNativeSuffix[] = ".native";
+    static constexpr std::size_t kNativeLen = sizeof(kNativeSuffix) - 1u;
+    if (normalized.size() > kNativeLen &&
+        normalized.compare(normalized.size() - kNativeLen, kNativeLen, kNativeSuffix) == 0) {
+        normalized.resize(normalized.size() - kNativeLen);
+    }
+
     return normalized;
 }
 
