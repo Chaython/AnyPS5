@@ -32,6 +32,20 @@ def main():
                                 capture_output=True, text=True, timeout=20)
         assert result.returncode == 0, (result.stdout, result.stderr)
         assert subsystem(gui_output.read_bytes()) == 2, "expected IMAGE_SUBSYSTEM_WINDOWS_GUI with --windows-gui"
+        if sys.platform == "win32":
+            # A GUI-subsystem process launched detached has no console. Runtime
+            # diagnostics must be best-effort instead of aborting before the
+            # guest ELF entry point.
+            executed = subprocess.run(
+                [str(gui_output)],
+                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+                close_fds=True,
+                timeout=20,
+            )
+            assert executed.returncode == 42, (
+                "GUI executable failed without console handles",
+                executed.returncode,
+            )
 
         bad_output = work / "bad.exe"
         result = subprocess.run([str(relinker), "--skip-sce-module", "--windows-gui", str(source), str(bad_output)],

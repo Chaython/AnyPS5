@@ -386,7 +386,9 @@ void CreateControls() {
                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                405, 206, 270, 23, ID_AUTORUN);
 
-    SendDlgItemMessageW(g_window, ID_GUI_SUBSYSTEM, BM_SETCHECK, BST_CHECKED, 0);
+    // Keep a console visible by default while translated runtime support is
+    // experimental, so startup/import failures cannot disappear silently.
+    SendDlgItemMessageW(g_window, ID_DIAGNOSTICS, BM_SETCHECK, BST_CHECKED, 0);
     SendDlgItemMessageW(g_window, ID_COMPAT_REPORT, BM_SETCHECK, BST_CHECKED, 0);
 
     AddControl(0, L"STATIC",
