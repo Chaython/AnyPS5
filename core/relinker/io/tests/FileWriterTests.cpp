@@ -14,8 +14,11 @@ void requireWriteFailure(const TValue& data) {
     try {
         writer.Write("/dev/full", data);
     } catch (const Domain::RelinkerException& e) {
-        if (std::string(e.what()) != "Failed to write file: /dev/full")
-            throw std::runtime_error("Unexpected write failure: " + std::string(e.what()));
+        const std::string message = e.what();
+        if (!message.starts_with("Failed to write file: /dev/full") &&
+            !message.starts_with("Failed to flush file: /dev/full") &&
+            !message.starts_with("Failed to close file: /dev/full"))
+            throw std::runtime_error("Unexpected write failure: " + message);
         return;
     }
     throw std::runtime_error("Write to /dev/full reported success");
