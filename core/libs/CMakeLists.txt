@@ -141,6 +141,16 @@ if(BUILD_TESTING)
         set_tests_properties(hmd2 PROPERTIES ENVIRONMENT_MODIFICATION
             "PATH=path_list_prepend:$<TARGET_FILE_DIR:libc>")
     endif()
+
+    add_test_executable(vr_setup_dialog_tests tests/VrSetupDialog.cpp)
+    target_include_directories(vr_setup_dialog_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(vr_setup_dialog_tests PRIVATE libSceVrSetupDialog)
+    configure_windows_unwind(vr_setup_dialog_tests)
+    add_test(NAME vr_setup_dialog COMMAND vr_setup_dialog_tests)
+    if(WIN32)
+        set_tests_properties(vr_setup_dialog PROPERTIES ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:libc>")
+    endif()
 endif()
 
 if(BUILD_TESTING)
