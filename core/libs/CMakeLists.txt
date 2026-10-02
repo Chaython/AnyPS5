@@ -132,6 +132,18 @@ list(APPEND PATCHED_OUTPUTS ${LIBCOHTML_PROSPERO_PATCHED})
 add_custom_target(libs DEPENDS ${PATCHED_OUTPUTS})
 
 if(BUILD_TESTING)
+    add_test_executable(hmd2_tests tests/Hmd2.cpp)
+    target_include_directories(hmd2_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(hmd2_tests PRIVATE libSceHmd2)
+    configure_windows_unwind(hmd2_tests)
+    add_test(NAME hmd2 COMMAND hmd2_tests)
+    if(WIN32)
+        set_tests_properties(hmd2 PROPERTIES ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:libc>")
+    endif()
+endif()
+
+if(BUILD_TESTING)
     add_library(host_thread_local_test_library SHARED tests/HostThreadLocalLibrary.cpp)
     set_target_properties(host_thread_local_test_library PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<1:${ANYPS5_TEST_OUTPUT_DIRECTORY}>")
     target_include_directories(host_thread_local_test_library PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
