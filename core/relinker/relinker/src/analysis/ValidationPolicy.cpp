@@ -20,6 +20,12 @@ std::string CanonicalImportProvider(const std::string& library) {
     // libkernel.prx (NEEDED libkernel's SCE import-lib module is Posix).
     if (library == "libScePosix")
         return "libkernel";
+    // PS5 HMD2 exposes some logical import submodules through the concrete
+    // libSceHmd2 provider. Treat those module names as aliases so valid HMD2
+    // imports do not produce false "not in NEEDED" warnings.
+    if (library == "libSceHmd2ReprojectionPositional" ||
+        library == "libSceHmd2Reprojection_nosubmission")
+        return "libSceHmd2";
     // General SCE convention: DT_NEEDED carries "libFoo.prx" while NID suffixes
     // and SCE import tables name the module "libFoo". Strip the suffix so the
     // membership check below does not false-throw on valid eboots.
