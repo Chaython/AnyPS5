@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   merge-upstream:
-    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'Trigger upstream sync')
+    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'Resolve upstream sync')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +25,21 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/boykopovar/AnyPS5.git
           git fetch upstream main
+          set +e
           git merge upstream/main --no-edit -X ours
+          merge_status=$?
+          set -e
+          if [ "$merge_status" -ne 0 ]; then
+            conflicts="$(git diff --name-only --diff-filter=U)"
+            expected="core/libs/prx/libSceNgs2.native/Export.cpp"
+            if [ "$conflicts" != "$expected" ]; then
+              echo "Unexpected merge conflicts:"
+              printf '%s\n' "$conflicts"
+              exit 1
+            fi
+            git rm "$expected"
+            git commit --no-edit
+          fi
           git rm .github/workflows/sync-upstream-main.yml
           git commit -m "Remove temporary upstream sync workflow"
           git push origin HEAD:sync-upstream-main
