@@ -2,7 +2,8 @@
   "source": "claimore22/ps5rs@2304be5131221bae0dac24b9767cabffda33f747:data/stubs/by_library",
   "aliases": {
     "libScePosix": "libkernel",
-    "libSceHmd2Reprojection_nosubmission": "libSceHmd2"
+    "libSceHmd2Reprojection_nosubmission": "libSceHmd2",
+    "libScePsml": "libScePsml_debug"
   },
   "libraries": [
     "libSceAcm",
