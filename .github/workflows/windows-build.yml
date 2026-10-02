@@ -58,6 +58,10 @@ jobs:
         shell: cmd
         run: cmake --build build --parallel 4
 
+      - name: Build runtime PRX libraries
+        shell: cmd
+        run: cmake --build build --target libs --parallel 4
+
       - name: Full Windows test suite
         shell: cmd
         run: ctest --test-dir build --output-on-failure --timeout 120
@@ -65,10 +69,18 @@ jobs:
       - name: Package Windows build
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          $runtimeDir = 'build\\core\\libs\\libs'
+          $requiredPrx = @('libc.prx', 'libkernel.prx', 'libSceAgcDriver.prx')
+          foreach ($name in $requiredPrx) {
+            if (-not (Test-Path (Join-Path $runtimeDir $name))) {
+              throw "Required runtime library was not built: $name"
+            }
+          }
           New-Item -ItemType Directory -Force dist, dist\\libs | Out-Null
           Copy-Item build\\core\\relinker\\relinker.exe dist\\
           Copy-Item build\\core\\relinker\\AnyPS5.exe dist\\
-          Copy-Item build\\core\\libs\\libs\\*.prx dist\\libs\\
+          Copy-Item "$runtimeDir\\*.prx" dist\\libs\\
           Copy-Item C:\\winlibs\\mingw64\\bin\\libgcc_s_seh-1.dll dist\\libs\\
           Copy-Item C:\\winlibs\\mingw64\\bin\\libstdc++-6.dll dist\\libs\\
           Copy-Item C:\\winlibs\\mingw64\\bin\\libwinpthread-1.dll dist\\libs\\
