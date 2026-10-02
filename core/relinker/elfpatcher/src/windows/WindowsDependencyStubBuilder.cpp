@@ -637,6 +637,17 @@ WindowsDependencyStub WindowsDependencyStubBuilder::Build(WindowsStubEmitter& co
     a.AddValue(Dx, 1);
     a.Value(Ax, 0);
     a.StoreByte(Dx, Ax);
+    a.Mov(Cx, Bx);
+    a.Api("GetFileAttributesA");
+    a.Value(Dx, 0xffffffffu);
+    a.Compare(Ax, Dx);
+    a.Jump("diagnoseRootPresent", 0x85);
+    a.Text("missingModule");
+    a.Mov(Cx, Bx);
+    a.Call("write");
+    a.Text("newline");
+    a.Jump("terminate");
+    a.Mark("diagnoseRootPresent");
     a.Value(Cx, 0);
     a.Value(Dx, NodeSize * NodeLimit);
     a.Value(R8, 0x3000);
