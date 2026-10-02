@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   merge-upstream:
-    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'Resolve upstream sync')
+    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'Resolve upstream sync v2')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,8 +38,9 @@ jobs:
               exit 1
             fi
             git rm "$expected"
+          fi
+          git checkout ORIG_HEAD -- .github/workflows
+          if [ "$merge_status" -ne 0 ]; then
             git commit --no-edit
           fi
-          git rm .github/workflows/sync-upstream-main.yml
-          git commit -m "Remove temporary upstream sync workflow"
           git push origin HEAD:sync-upstream-main
