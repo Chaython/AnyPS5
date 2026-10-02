@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   merge-upstream:
-    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'Trigger upstream sync 20261002b')
+    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'Resolve upstream sync 20261002b')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,14 +25,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/boykopovar/AnyPS5.git
           git fetch upstream main
-          set +e
-          git merge upstream/main --no-edit
-          status=$?
-          set -e
-          if [ "$status" -ne 0 ]; then
-            echo "Merge conflicts:"
-            git diff --name-only --diff-filter=U
-            exit 1
-          fi
+          git merge upstream/main --no-edit -X ours
           git checkout ORIG_HEAD -- .github/workflows
           git push origin HEAD:sync-upstream-20261002b
