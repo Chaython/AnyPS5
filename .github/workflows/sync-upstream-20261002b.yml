@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   merge-upstream:
-    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'Resolve upstream sync 20261002b')
+    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'Resolve upstream sync 20261002b v2')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,4 +27,8 @@ jobs:
           git fetch upstream main
           git merge upstream/main --no-edit -X ours
           git checkout ORIG_HEAD -- .github/workflows
+          if ! git diff --quiet -- .github/workflows; then
+            git add .github/workflows
+            git commit -m "Keep workflow files for API sync"
+          fi
           git push origin HEAD:sync-upstream-20261002b
