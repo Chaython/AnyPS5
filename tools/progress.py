@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PRX = ROOT / "core" / "libs" / "prx"
 OPCODES = ROOT / "core" / "shader" / "recompiler" / "RdnaDecoder" / "include" / "RdnaDecoder" / "RdnaOpcode.hpp"
 ISA = Path(__file__).resolve().parent / "rdna_isa.txt"
+PRX_CATALOG = Path(__file__).resolve().parent / "prx_catalog.json"
 SOURCE = f'https://github.com/{os.environ.get("GITHUB_REPOSITORY", "boykopovar/AnyPS5")}/blob/main'
 DEFINITION = re.compile(r"\bAPS5_VABI\s+(\w+)\s*\([^;{]*\)\s*(?:noexcept\s*)?\{")
 STUB = "NotImplemented_nid_no_patch"
@@ -83,6 +84,34 @@ def summarize(groups):
 
 def collect_libraries():
     return summarize([scan_library(p) for p in sorted(PRX.iterdir()) if p.is_dir()])
+
+
+def collect_prx_catalog():
+    data = json.loads(PRX_CATALOG.read_text())
+    providers = {p.name for p in PRX.iterdir() if p.is_dir()}
+    aliases = data.get("aliases", {})
+
+    def available(name):
+        provider = aliases.get(name, name)
+        return provider in providers or f"{provider}.native" in providers
+
+    def development_only(name):
+        return "_nosubmission" in name or "Sanitizer" in name or "_debug" in name
+
+    known = sorted(set(data["libraries"]))
+    missing = [name for name in known if not available(name)]
+    missing_retail = [name for name in missing if not development_only(name)]
+    missing_development = [name for name in missing if development_only(name)]
+    covered = len(known) - len(missing)
+    return {
+        "source": data.get("source", ""),
+        "known": len(known),
+        "covered": covered,
+        "percent": round(100 * covered / len(known), 2) if known else 0,
+        "missing": missing,
+        "missing_retail": missing_retail,
+        "missing_development": missing_development,
+    }
 
 
 def camel(name):
@@ -306,13 +335,20 @@ if __name__ == "__main__":
     if args.root:
         PRX = args.root / "core" / "libs" / "prx"
         OPCODES = args.root / OPCODES.relative_to(ROOT)
+        catalog_candidate = args.root / PRX_CATALOG.relative_to(ROOT)
+        if catalog_candidate.exists():
+            PRX_CATALOG = catalog_candidate
     output = args.output
     output.mkdir(parents=True, exist_ok=True)
     libraries, shaders = collect_libraries(), collect_shaders()
-    (output / "progress.json").write_text(json.dumps({"libraries": libraries, "shaders": shaders}, indent=2))
+    prx_catalog = collect_prx_catalog()
+    (output / "progress.json").write_text(json.dumps(
+        {"libraries": libraries, "shaders": shaders, "prx_catalog": prx_catalog}, indent=2))
     (output / "badge-libraries.svg").write_text(badge("libraries*", libraries))
     (output / "badge-shaders.svg").write_text(badge("shaders", shaders))
     (output / "progress.svg").write_text(render(libraries, shaders))
     (output / "index.html").write_text(summary(libraries, shaders))
     print(f'libraries {libraries["done"]}/{libraries["total"]} ({libraries["percent"]}%)')
+    print(f'known PRX providers {prx_catalog["covered"]}/{prx_catalog["known"]} ({prx_catalog["percent"]}%)')
+    print(f'missing retail PRX providers: {len(prx_catalog["missing_retail"])}')
     print(f'shaders {shaders["done"]}/{shaders["total"]} ({shaders["percent"]}%)')
