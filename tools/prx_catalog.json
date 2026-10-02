@@ -23,6 +23,7 @@
     "libSceAudiodecCpu",
     "libSceAudiodecCpuHevag",
     "libSceAvPlayer",
+    "libSceCdlgPlayerReview",
     "libSceCesCs",
     "libSceCommonDialog",
     "libSceContentDelete",
