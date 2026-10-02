@@ -147,4 +147,12 @@ int APS5_VABI sceUserServiceGetPlatformPrivacyWs1(int32_t user_id, int32_t* valu
     return 0;
 }
 
+// Logical import module libSceUserServicePlatformPrivacyWs1 uses this export.
+// Parameter 1000 is the currently observed platform-privacy selector.
+int APS5_VABI sceUserServiceGetPlatformPrivacySetting(int32_t parameter_id, int32_t* value) {
+    if (parameter_id != 1000 || !value) return USER_SERVICE_ERROR_INVALID_ARGUMENT;
+    *value = 0;
+    return USER_SERVICE_OK;
+}
+
 }
