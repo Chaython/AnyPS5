@@ -1,14 +1,17 @@
-// Compatibility provider generated from the public PS5 NID catalog.
-// The module is loadable, but unverified calls fail fast instead of returning fake success.
 #include <cstdint>
 #include "prx/libc/include/General.hpp"
 
+namespace {
+constexpr std::int32_t SCE_SYSTEM_SERVICE_ERROR_UNAVAILABLE =
+    static_cast<std::int32_t>(0x80A10002u);
+}
+
 extern "C" {
 
-APS5_EXPORT("gELp9ue2ccQ", aps5CompatStub_0);
-std::int64_t APS5_VABI aps5CompatStub_0(...) {
-    NotImplemented_nid_no_patch("sceSystemServiceOpenTournamentOccurrence");
-    return -1;
+std::int32_t APS5_VABI sceSystemServiceOpenTournamentOccurrence(...) {
+    // Tournament shell UI is unavailable on the host. Return the platform's
+    // documented/observed "unavailable" service error instead of crashing.
+    return SCE_SYSTEM_SERVICE_ERROR_UNAVAILABLE;
 }
 
 }
