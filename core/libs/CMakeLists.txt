@@ -173,6 +173,16 @@ if(BUILD_TESTING)
             "PATH=path_list_prepend:$<TARGET_FILE_DIR:libc>")
     endif()
 
+    add_test_executable(player_review_dialog_tests tests/PlayerReviewDialog.cpp)
+    target_include_directories(player_review_dialog_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(player_review_dialog_tests PRIVATE libSceCdlgPlayerReview)
+    configure_windows_unwind(player_review_dialog_tests)
+    add_test(NAME player_review_dialog COMMAND player_review_dialog_tests)
+    if(WIN32)
+        set_tests_properties(player_review_dialog PROPERTIES ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:libc>")
+    endif()
+
     add_test_executable(savedata_memory_growth_tests tests/SaveDataMemoryGrowth.cpp)
     target_include_directories(savedata_memory_growth_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(savedata_memory_growth_tests PRIVATE libSceSaveData.native)
