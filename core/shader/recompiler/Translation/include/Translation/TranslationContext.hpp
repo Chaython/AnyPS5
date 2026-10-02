@@ -116,7 +116,7 @@ private:
     void emitCompareConstant(const RdnaInstruction& inst, bool value, bool scalar, bool cmpx);
     void emitIntegerCompare(const RdnaInstruction& inst, IrOpcode opcode, IrType type, bool scalar, bool cmpx);
     void emitInteger16Compare(const RdnaInstruction& inst, IrOpcode opcode, bool signedValue, bool cmpx);
-    void emitFloatCompare(const RdnaInstruction& inst, IrOpcode opcode, bool half, bool cmpx);
+    void emitFloatCompare(const RdnaInstruction& inst, IrOpcode opcode, bool half, bool cmpx, bool swap = false);
     void emitInteger64Order(const RdnaInstruction& inst, bool signedValue, bool swap, bool negate, bool cmpx);
     void emitFloatOrderedCompare(const RdnaInstruction& inst, bool ordered, bool half, bool cmpx);
     void emitFloatClassCompare(const RdnaInstruction& inst, bool cmpx);
@@ -169,9 +169,9 @@ private:
     bool vAndOrB32(const RdnaInstruction& inst);
     bool vOr3B32(const RdnaInstruction& inst);
     bool vXor3B32(const RdnaInstruction& inst);
-    bool sFf1I32B64(const RdnaInstruction& inst);
+    bool sFfI32B64(const RdnaInstruction& inst, bool zero);
     bool vFfbh32(const RdnaInstruction& inst, bool sign);
-    bool sFlbitI32B64(const RdnaInstruction& inst);
+    bool sFlbitI32B64(const RdnaInstruction& inst, bool sign);
     bool integer24(const RdnaInstruction& inst, bool sign, bool addend, bool high = false);
     bool vMadU64U32(const RdnaInstruction& inst);
     bool vSadU32(const RdnaInstruction& inst);
@@ -181,7 +181,7 @@ private:
     bool vBcntU32B32(const RdnaInstruction& inst);
     bool vMbcntU32B32(const RdnaInstruction& inst, bool low);
     bool sBitreplicateB64B32(const RdnaInstruction& inst);
-    bool sQuadmaskB64(const RdnaInstruction& inst);
+    bool sQuadmask(const RdnaInstruction& inst, bool wide);
     bool bfmB32(const RdnaInstruction& inst);
     IrU32 rightMask32(IrU32 count);
     IrU64 rightMask64(IrU32 count);
