@@ -21,11 +21,48 @@
 #include <codegen/IAmd64OnlyConverter.hpp>
 #include <codegen/CodegenException.hpp>
 #include <filesystem>
+#include <system_error>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
+
+namespace {
+
+void StageBundledRuntimeLibraries(const char* executablePath, const std::string& outputPath) {
+    std::error_code ec;
+    const auto toolPath = std::filesystem::absolute(std::filesystem::path(executablePath), ec);
+    if (ec) return;
+    const auto sourceDirectory = toolPath.parent_path() / "libs";
+    if (!std::filesystem::is_directory(sourceDirectory, ec) || ec) return;
+
+    const auto output = std::filesystem::absolute(std::filesystem::path(outputPath), ec);
+    if (ec) return;
+    const auto destinationDirectory = output.parent_path() / "libs";
+    std::filesystem::create_directories(destinationDirectory, ec);
+    if (ec) throw std::runtime_error("Cannot create runtime library directory: " + destinationDirectory.string());
+
+    std::size_t copied = 0;
+    for (std::filesystem::directory_iterator iterator(sourceDirectory, ec), end; iterator != end; iterator.increment(ec)) {
+        if (ec) throw std::runtime_error("Cannot enumerate bundled runtime libraries: " + sourceDirectory.string());
+        std::error_code fileError;
+        if (!iterator->is_regular_file(fileError) || fileError) continue;
+        const auto destination = destinationDirectory / iterator->path().filename();
+        if (std::filesystem::exists(destination, fileError)) continue;
+        fileError.clear();
+        if (std::filesystem::copy_file(iterator->path(), destination, std::filesystem::copy_options::none, fileError)) {
+            ++copied;
+        } else if (fileError) {
+            throw std::runtime_error("Cannot copy runtime library to " + destination.string() + ": " + fileError.message());
+        }
+    }
+
+    if (copied != 0)
+        std::cout << "Staged " << copied << " bundled runtime libraries in " << destinationDirectory.string() << '\n';
+}
+
+}
 
 int main(const int argc, char* argv[]) {
     Cli::Args args;
@@ -122,6 +159,7 @@ int main(const int argc, char* argv[]) {
             std::cout << "Guest module: " << artifact.Path.string() << '\n';
         }
         fileWriter.Write(absPath, executableBytes);
+        StageBundledRuntimeLibraries(argv[0], absPath);
         std::cout << "External prx references: " << result.RegistryEntries.size() << "\nOutput file: " << absPath << '\n';
         std::cout << "Expected runtime layout (relative to the output executable):\n"
                   << std::filesystem::path(absPath).filename().string() << "\n"
