@@ -1,0 +1,31 @@
+name: Temporary upstream sync
+
+on:
+  push:
+    branches:
+      - sync-upstream-main
+
+permissions:
+  contents: write
+
+jobs:
+  merge-upstream:
+    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'Trigger upstream sync')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Merge upstream main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/boykopovar/AnyPS5.git
+          git fetch upstream main
+          git merge upstream/main --no-edit -X ours
+          git rm .github/workflows/sync-upstream-main.yml
+          git commit -m "Remove temporary upstream sync workflow"
+          git push origin HEAD:sync-upstream-main
