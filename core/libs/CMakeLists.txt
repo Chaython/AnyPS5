@@ -129,6 +129,27 @@ add_custom_command(
 add_custom_target(libcohtml_prospero DEPENDS ${LIBCOHTML_PROSPERO_PATCHED})
 list(APPEND PATCHED_OUTPUTS ${LIBCOHTML_PROSPERO_PATCHED})
 
+# Some PS5 logical providers are alternate module names for an implementation
+# that already exists in AnyPS5. Emit concrete runtime filenames so translated
+# executables with those names in DT_NEEDED can still load them.
+set(LIBSCEPOSIX_PATCHED ${PATCHED_DIR}/libScePosix.prx)
+add_custom_command(
+        OUTPUT ${LIBSCEPOSIX_PATCHED}
+        COMMAND ${CMAKE_COMMAND} -E copy "${PATCHED_DIR}/libkernel.prx" "${LIBSCEPOSIX_PATCHED}"
+        DEPENDS "${PATCHED_DIR}/libkernel.prx"
+        VERBATIM
+)
+list(APPEND PATCHED_OUTPUTS ${LIBSCEPOSIX_PATCHED})
+
+set(LIBSCEPSML_PATCHED ${PATCHED_DIR}/libScePsml.prx)
+add_custom_command(
+        OUTPUT ${LIBSCEPSML_PATCHED}
+        COMMAND ${CMAKE_COMMAND} -E copy "${PATCHED_DIR}/libScePsml_debug.prx" "${LIBSCEPSML_PATCHED}"
+        DEPENDS "${PATCHED_DIR}/libScePsml_debug.prx"
+        VERBATIM
+)
+list(APPEND PATCHED_OUTPUTS ${LIBSCEPSML_PATCHED})
+
 add_custom_target(libs DEPENDS ${PATCHED_OUTPUTS})
 
 if(BUILD_TESTING)
