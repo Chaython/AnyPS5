@@ -5,22 +5,31 @@
 #include <string>
 #include "SceTypes.hpp"
 #include "prx/libc/include/General.hpp"
-
-namespace {
-constexpr int KernelEsrch = static_cast<int>(0x80020003u);
-constexpr int KernelEfault = static_cast<int>(0x8002000Eu);
-constexpr int KernelEinval = static_cast<int>(0x80020016u);
-}
+#include "prx/libkernel/DirectMemory/DirectMemory.hpp"
+#include "prx/libkernel/KernelErrors.hpp"
+#ifdef _WIN32
+#include <windows.h>
+#include <psapi.h>
+#else
+#include <fstream>
+#endif
 
 extern "C" {
 void* APS5_VABI dlopen_sce_module_nid_no_patch(const char* path, int flags);
 void* APS5_VABI dlsym_nid_postfix(void* handle, const char* name);
 int APS5_VABI dlclose_nid_postfix(void* handle);
+}
+
+namespace {
+constexpr int kRtldNow = 2;
+}
+
+extern "C" {
 
 int APS5_VABI sceKernelDlsym(KernelModule handle, const char* symbol, void** addr) {
- if (!symbol || !addr) return KernelEfault;
- void* found = dlsym_nid_postfix(reinterpret_cast<void*>(static_cast<std::intptr_t>(handle)), symbol);
- if (!found) return KernelEsrch;
+ if (!symbol || !addr) return SCE_KERNEL_ERROR_EFAULT;
+ void* found = dlsym_nid_postfix(reinterpret_cast<void*>(static_cast<intptr_t>(handle)), symbol);
+ if (!found) return SCE_KERNEL_ERROR_ESRCH;
  *addr = found;
  return 0;
 }
@@ -85,23 +94,22 @@ int APS5_VABI sceKernelGetModuleInfoFromAddr(uint64_t addr, int n, ModuleInfo* r
 KernelModule APS5_VABI sceKernelLoadStartModule(const char* module_file_name, size_t args, const void* argp, uint32_t flags, const KernelLoadModuleOpt* opt, int* res) {
  (void)args;
  (void)argp;
+ (void)flags;
  (void)opt;
- if (!module_file_name) return static_cast<KernelModule>(KernelEfault);
- if (flags != 0) return static_cast<KernelModule>(KernelEinval);
- void* handle = dlopen_sce_module_nid_no_patch(module_file_name, 2);
- if (!handle) return static_cast<KernelModule>(KernelEsrch);
  if (res) *res = 0;
- return static_cast<KernelModule>(reinterpret_cast<std::intptr_t>(handle));
+ if (!module_file_name) return static_cast<KernelModule>(SCE_KERNEL_ERROR_EFAULT);
+ void* handle = dlopen_sce_module_nid_no_patch(module_file_name, kRtldNow);
+ if (!handle) return static_cast<KernelModule>(SCE_KERNEL_ERROR_ENOENT);
+ return static_cast<KernelModule>(reinterpret_cast<intptr_t>(handle));
 }
 
 int APS5_VABI sceKernelStopUnloadModule(KernelModule handle, size_t args, const void* argp, uint32_t flags, const KernelUnloadModuleOpt* opt, int* res) {
  (void)args;
  (void)argp;
+ (void)flags;
  (void)opt;
- if (flags != 0) return KernelEinval;
- if (dlclose_nid_postfix(reinterpret_cast<void*>(static_cast<std::intptr_t>(handle))) != 0) return KernelEsrch;
  if (res) *res = 0;
- return 0;
+ return dlclose_nid_postfix(reinterpret_cast<void*>(static_cast<intptr_t>(handle))) == 0 ? 0 : SCE_KERNEL_ERROR_ESRCH;
 }
 
 }
