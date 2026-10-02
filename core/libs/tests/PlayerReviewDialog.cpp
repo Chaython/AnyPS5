@@ -1,13 +1,14 @@
 #include <cstdint>
+#include "prx/libc/include/general/VabiMacros.hpp"
 
 extern "C" {
-std::int32_t scePlayerReviewDialogInitialize();
-std::int32_t scePlayerReviewDialogOpen(const void*);
-std::int32_t scePlayerReviewDialogUpdateStatus();
-std::int32_t scePlayerReviewDialogGetStatus();
-std::int32_t scePlayerReviewDialogGetResult(void*);
-std::int32_t scePlayerReviewDialogClose();
-std::int32_t scePlayerReviewDialogTerminate();
+std::int32_t APS5_VABI scePlayerReviewDialogInitialize();
+std::int32_t APS5_VABI scePlayerReviewDialogOpen(const void*);
+std::int32_t APS5_VABI scePlayerReviewDialogUpdateStatus();
+std::int32_t APS5_VABI scePlayerReviewDialogGetStatus();
+std::int32_t APS5_VABI scePlayerReviewDialogGetResult(void*);
+std::int32_t APS5_VABI scePlayerReviewDialogClose();
+std::int32_t APS5_VABI scePlayerReviewDialogTerminate();
 }
 
 int main() {
