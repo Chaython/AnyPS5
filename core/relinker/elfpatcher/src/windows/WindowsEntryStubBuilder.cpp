@@ -90,7 +90,7 @@ WindowsEntryStub WindowsEntryStubBuilder::Build(const std::uint32_t dataRva, con
     const auto errorMessage = reserve(ErrorMessageCapacity);
     const auto loading = addString("Loading PRX: ");
     const auto loaded = addString(" -> OK\n");
-    const auto loadFailed = addString(" -> FAILED\n");
+    const auto loadFailed = addString(" -> FAILED (continuing)\n");
     const auto failedModule = addString("Failed to load module: ");
     const auto errorPrefix = addString("GetLastError: ");
     const auto messageSeparator = addString(" - ");
@@ -275,13 +275,15 @@ WindowsEntryStub WindowsEntryStubBuilder::Build(const std::uint32_t dataRva, con
         writeString(resolvedPaths[index], true);
         writeString(newline, true);
         writeLastError();
-        if (dependencyDiagnostics) {
-            code.Rip({0x48, 0x8d, 0x0d}, resolvedPaths[index]);
-            code.Rip({0x48, 0x8d, 0x15}, programPath);
-            dependencyCalls.push_back(code.Branch({0xe8}));
-        }
-        raise(0xc0000135u);
+        // A DT_NEEDED provider may be absent on the host even when none of its
+        // exports are actually referenced by the converted executable. Keep a
+        // null handle and continue loading the remaining providers; eager symbol
+        // resolution below will still fail deterministically if a real import
+        // cannot be satisfied by any loaded PRX.
+        code.Emit({0x31, 0xc0});
+        const auto storeHandle = code.Branch({0xe9});
         code.PatchBranch(loadSucceeded, code.GetRva());
+        code.PatchBranch(storeHandle, code.GetRva());
         code.Rip({0x48, 0x89, 0x05}, CheckedRva(handles + index * 8));
 
         if (dependencyDiagnostics) {
