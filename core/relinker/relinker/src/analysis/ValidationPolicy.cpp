@@ -26,6 +26,8 @@ std::string CanonicalImportProvider(const std::string& library) {
     if (library == "libSceHmd2ReprojectionPositional" ||
         library == "libSceHmd2Reprojection_nosubmission")
         return "libSceHmd2";
+    if (library == "libSceUserServicePlatformPrivacyWs1")
+        return "libSceUserService";
     // General SCE convention: DT_NEEDED carries "libFoo.prx" while NID suffixes
     // and SCE import tables name the module "libFoo". Strip the suffix so the
     // membership check below does not false-throw on valid eboots.
