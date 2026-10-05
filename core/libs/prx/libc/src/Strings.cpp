@@ -1,5 +1,6 @@
 #include "prx/libc/include/ApplicationHeap.hpp"
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <cstdlib>
 #include <cctype>
@@ -82,12 +83,12 @@ size_t APS5_VABI strlcpy_nid_postfix(char* dest, const char* src, size_t size) {
     return srcLen;
 }
 
-long APS5_VABI strtol_nid_postfix(const char* str, char** endptr, int base) {
-    return std::strtol(str, endptr, base);
+std::int64_t APS5_VABI strtol_nid_postfix(const char* str, char** endptr, int base) {
+    return std::strtoll(str, endptr, base);
 }
 
-unsigned long APS5_VABI strtoul_nid_postfix(const char* str, char** endptr, int base) {
-    return std::strtoul(str, endptr, base);
+std::uint64_t APS5_VABI strtoul_nid_postfix(const char* str, char** endptr, int base) {
+    return std::strtoull(str, endptr, base);
 }
 
 long long APS5_VABI strtoll_nid_postfix(const char* str, char** endptr, int base) {
@@ -354,6 +355,10 @@ size_t APS5_VABI wcsxfrm_nid_postfix(wchar_t* destination, const wchar_t* source
 
 size_t APS5_VABI strxfrm_nid_postfix(char* destination, const char* source, size_t count) {
     return std::strxfrm(destination, source, count);
+}
+
+size_t APS5_VABI wcsrtombs_nid_postfix(char* destination, const wchar_t** source, size_t count, mbstate_t* state) {
+    return std::wcsrtombs(destination, source, count, state);
 }
 
 }

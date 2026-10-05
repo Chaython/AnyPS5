@@ -189,6 +189,7 @@ struct SpirvTarget {
     std::uint32_t maxWorkgroupSharedMemoryBytes;
     std::optional<MeshTargetLimits> mesh;
     std::optional<TessellationTargetLimits> tessellation;
+    bool nonConstantImageOffsets = false;
 };
 
 struct BindingLayout {
@@ -237,6 +238,10 @@ struct TessellationConfiguration {
 
 inline constexpr std::uint32_t MeshDrawPushOffsetBytes = 104;
 inline constexpr std::uint32_t MeshDrawPushBytes = 24;
+inline constexpr std::uint32_t MeshArgumentAddressDword = 4;
+inline constexpr std::uint32_t MeshArgumentIndexCountDword = 3;
+inline constexpr std::uint32_t MeshArgumentFirstIndexDword = 4;
+inline constexpr std::uint32_t MeshArgumentBytes = 20;
 inline constexpr std::uint32_t MeshIndexBufferUserWord = 4;
 
 struct GraphicsDrawParameters {
@@ -392,6 +397,7 @@ struct RecompileResult {
     bool instanceOffsetShared = false;
     bool vertexOffsetConflict = false;
     bool instanceOffsetConflict = false;
+    std::uint32_t hostSubgroupSize = 0;
     std::vector<std::uint32_t> parameterExports;
     std::vector<FragmentParameter> fragmentParameters;
     bool cacheHit = false;
