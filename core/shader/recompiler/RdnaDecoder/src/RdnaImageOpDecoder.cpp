@@ -93,6 +93,7 @@ constexpr ImageOpcodeInfo imageOpcodes[] = {
     {0x08u, RdnaOpcode::ImageStore, nullptr, 0, false, false, false},
     {0x09u, RdnaOpcode::ImageStoreMip, nullptr, 0, false, false, false},
     {0x0eu, RdnaOpcode::ImageGetResinfo, nullptr, 0, false, false, false},
+    {0x80u, RdnaOpcode::ImageMsaaLoad, nullptr, 0, false, false, false},
     {0x60u, RdnaOpcode::ImageGetLod, nullptr, 0, false, false, false},
     {0xe6u, RdnaOpcode::ImageBvhIntersectRay, "image_bvh_intersect_ray", 0, false, false, false},
 };
@@ -280,8 +281,13 @@ RdnaInstruction DecodeRdnaMimg(std::uint32_t programCounter, std::span<const std
     if (multisampled && (info.sample || info.gather || opcode == 0x60u || opcode == 1u || opcode == 9u)) {
         throw std::runtime_error("unsupported multisampled MIMG operation");
     }
+    const bool msaaLoad = info.opcode == RdnaOpcode::ImageMsaaLoad;
+    if (msaaLoad && !multisampled) {
+        throw std::runtime_error("image_msaa_load requires a multisampled dimension");
+    }
     const auto dmask = (word0 >> 8u) & 15u;
-    if (dmask == 0u || ((info.gather || info.atomic) && !std::has_single_bit(dmask))) {
+    const bool compareSwap = info.opcode == RdnaOpcode::ImageAtomicCmpswap || info.opcode == RdnaOpcode::ImageAtomicFcmpswap;
+    if (dmask == 0u || (compareSwap ? dmask != 3u : (info.gather || info.atomic || msaaLoad) && !std::has_single_bit(dmask))) {
         throw std::runtime_error("invalid MIMG data mask");
     }
     if (d16 && !(info.sample || info.gather || opcode == 0u || opcode == 1u || opcode == 8u || opcode == 9u)) {
@@ -308,7 +314,7 @@ RdnaInstruction DecodeRdnaMimg(std::uint32_t programCounter, std::span<const std
     if (nsa == 0u && addressDwords > 256u - vaddr) {
         throw std::runtime_error("MIMG address register range overflow");
     }
-    const auto dataComponents = info.gather ? 4u : static_cast<std::uint32_t>(std::popcount(dmask));
+    const auto dataComponents = info.gather || msaaLoad ? 4u : static_cast<std::uint32_t>(std::popcount(dmask));
     const auto dataDwords = d16 ? (dataComponents + 1u) / 2u : dataComponents;
     if (dataDwords > 256u - vdata) {
         throw std::runtime_error("MIMG data register range overflow");

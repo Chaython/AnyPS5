@@ -2,6 +2,7 @@
 #include "prx/libc/include/general/VabiMacros.hpp"
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <thread>
 extern "C" {
@@ -30,6 +31,12 @@ int main(int argc, char** argv) {
     auto add = reinterpret_cast<Add>(dlsym_nid_postfix(module, "GuestModuleAdd"));
     Require(add && add(17, 25) == 42);
     Require(dlsym_nid_postfix(reinterpret_cast<void*>(-2), "GuestModuleAdd") == reinterpret_cast<void*>(add));
+#ifndef _WIN32
+    auto mul = reinterpret_cast<Add>(dlsym_nid_postfix(module, "GuestModuleMul"));
+    Require(mul && mul(6, 7) == 42);
+    auto sub = reinterpret_cast<Add>(dlsym_nid_postfix(module, "GuestModuleSub"));
+    Require(sub && sub(50, 8) == 42);
+#endif
     Require(dlsym_nid_postfix(module, "missing_symbol") == nullptr);
     std::thread other([] { Require(dlerror_nid_postfix() == nullptr); });
     other.join();
@@ -43,6 +50,22 @@ int main(int argc, char** argv) {
     Require(add && add(2, 3) == 5);
     Require(dlclose_nid_postfix(second) == 0);
     Require(dlclose_nid_postfix(second) == -1);
+
+    const std::filesystem::path guest = "anyps5-relinked-module-for-test.prx";
+    auto relinked = guest;
+    relinked += ".guest.prx";
+    {
+        std::ofstream elf(guest, std::ios::binary);
+        elf.write("\x7f" "ELF", 4);
+    }
+    std::filesystem::copy_file(argv[1], relinked, std::filesystem::copy_options::overwrite_existing);
+    void* redirected = dlopen_nid_postfix(guest.string().c_str(), 2);
+    Require(redirected != nullptr);
+    add = reinterpret_cast<Add>(dlsym_nid_postfix(redirected, "GuestModuleAdd"));
+    Require(add && add(40, 2) == 42);
+    Require(dlclose_nid_postfix(redirected) == 0);
+    std::filesystem::remove(guest);
+    std::filesystem::remove(relinked);
 
     const std::string guestSource = "anyps5-kernel-module-fixture.prx";
     const std::string converted = guestSource + ".guest.prx";
