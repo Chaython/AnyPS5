@@ -6,6 +6,10 @@ Includes a [relinker](core/relinker) that converts executable to the target syst
 
 [Usage](docs/user/USAGE.md), [Build instructions](docs/dev/BUILD.md), [Architecture](docs/dev/ARCHITECTURE.md), [Technical debt of the project](docs/dev/TechnicalDebt.md), [code style conventions](docs/dev/CONVENTIONS.md), [contributing](CONTRIBUTING.md)
 
+## Windows graphical converter (fork)
+
+This fork optionally builds a standalone Windows converter GUI (`AnyPS5.exe`) that runs upstream's `relinker.exe`. See [Windows GUI usage and limitations](docs/user/WINDOWS_GUI.md). This does not change the relinker or claim additional game compatibility.
+
 ## Status
 
 [![libraries](https://boykopovar.github.io/AnyPS5/badge-libraries.svg)](https://boykopovar.github.io/AnyPS5/) [![shaders](https://boykopovar.github.io/AnyPS5/badge-shaders.svg)](https://boykopovar.github.io/AnyPS5/)

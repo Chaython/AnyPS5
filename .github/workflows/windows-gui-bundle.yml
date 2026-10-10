@@ -1,0 +1,75 @@
+name: Windows GUI Bundle
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-gui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-gui-bundle:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      WINLIBS_RELEASE: 15.2.0posix-14.0.0-ucrt-r7
+      WINLIBS_ZIP: winlibs-x86_64-posix-seh-gcc-15.2.0-mingw-w64ucrt-14.0.0-r7.zip
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/cache@v6
+        id: toolchain
+        with:
+          path: C:\winlibs
+          key: ${{ runner.os }}-${{ env.WINLIBS_ZIP }}
+      - name: Install WinLibs
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/winlibs.zip" "https://github.com/brechtsanders/winlibs_mingw/releases/download/$WINLIBS_RELEASE/$WINLIBS_ZIP"
+          7z x "$RUNNER_TEMP/winlibs.zip" -oC:/winlibs > /dev/null
+      - name: Add WinLibs to PATH
+        run: echo 'C:\winlibs\mingw64\bin' >> "$GITHUB_PATH"
+      - name: Configure Windows build
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+      - name: Build Windows relinker, GUI, and libraries
+        run: |
+          cmake --build build --parallel 3
+          cmake --build build --target libs --parallel 3
+      - name: Run Windows tests
+        run: ctest --test-dir build --output-on-failure --timeout 120
+      - name: Package Windows GUI and runtime
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          test -f build/core/relinker/relinker.exe
+          test -f build/core/relinker/AnyPS5.exe
+          test -f build/core/libs/libs/libc.prx
+          test -f build/core/libs/libs/libkernel.prx
+          mkdir -p dist/libs
+          cp build/core/relinker/relinker.exe build/core/relinker/AnyPS5.exe dist/
+          cp build/core/libs/libs/*.prx dist/libs/
+          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            test -f "C:/winlibs/mingw64/bin/$dll"
+            cp "C:/winlibs/mingw64/bin/$dll" dist/
+            cp "C:/winlibs/mingw64/bin/$dll" dist/libs/
+          done
+          cp docs/user/WINDOWS_GUI.md dist/README-Windows.md
+      - uses: actions/upload-artifact@v7
+        if: github.event_name != 'pull_request'
+        with:
+          name: AnyPS5-Windows-GUI-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
