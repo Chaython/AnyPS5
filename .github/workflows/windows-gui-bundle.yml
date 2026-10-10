@@ -48,6 +48,12 @@ jobs:
         run: |
           cmake --build build --parallel 3
           cmake --build build --target libs --parallel 3
+      - name: Stage matching MinGW runtimes for PRX loading
+        run: |
+          set -euo pipefail
+          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            cp "C:/winlibs/mingw64/bin/$dll" build/core/libs/libs/
+          done
       - name: Run Windows tests
         run: ctest --test-dir build --output-on-failure --timeout 120 --no-tests=error
       - name: Package Windows GUI and runtime
