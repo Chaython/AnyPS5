@@ -7,24 +7,46 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: progress-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   progress:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Generate progress report
+        run: python3 tools/progress.py out
+      # The upstream project owns the public Pages dashboard. On forks,
+      # retain the generated report as a normal Actions artifact rather than
+      # attempting to publish into an unconfigured github-pages environment.
+      - name: Upload progress report (forks)
+        if: github.repository != 'boykopovar/AnyPS5'
+        uses: actions/upload-artifact@v7
+        with:
+          name: progress-${{ github.sha }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload Pages artifact (upstream only)
+        if: github.repository == 'boykopovar/AnyPS5'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: out/
+  deploy:
+    if: github.repository == 'boykopovar/AnyPS5'
+    needs: progress
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v7
-      - run: python3 tools/progress.py out
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: out
-      - id: deployment
+      - name: Deploy upstream Pages dashboard
+        id: deployment
         uses: actions/deploy-pages@v5
