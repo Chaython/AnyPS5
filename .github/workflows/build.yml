@@ -288,6 +288,12 @@ jobs:
         run: cmake --build build
       - shell: cmd
         run: cmake --build build --target libs
+      - name: Stage matching MinGW runtimes for PRX loading
+        run: |
+          set -euo pipefail
+          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            cp "C:/winlibs/mingw64/bin/$dll" build/core/libs/libs/
+          done
       - shell: cmd
         run: ctest --test-dir build --output-on-failure --timeout 120 --parallel 4 --output-log ctest.log --output-junit ctest.xml
       - run: python tools/check_skips.py build/ctest.xml --job windows
