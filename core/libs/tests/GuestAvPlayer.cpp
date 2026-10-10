@@ -504,7 +504,12 @@ void Release(void* memory, bool texture) {
     {
         std::lock_guard lock(allocations.mutex);
         const auto found = allocations.blocks.find(memory);
-        if (found == allocations.blocks.end() || found->second.texture != texture) std::abort();
+        if (found == allocations.blocks.end() || found->second.texture != texture) {
+            std::fprintf(stderr, "GuestAvPlayer: invalid %s deallocation for %p (registered=%d)\n",
+                         texture ? "texture" : "memory", memory, found != allocations.blocks.end());
+            std::fflush(stderr);
+            std::abort();
+        }
         aligned = found->second.alignment;
         allocations.blocks.erase(found);
     }
@@ -549,7 +554,12 @@ struct Events {
 
 void APS5_VABI OnEvent(void* object, std::int32_t id, std::int32_t source, void* data) {
     auto* events = static_cast<Events*>(object);
-    if (source != 0 || (id == EventWarning) != (data != nullptr)) std::abort();
+    if (source != 0 || (id == EventWarning) != (data != nullptr)) {
+        std::fprintf(stderr, "GuestAvPlayer: invalid event callback (id=%d source=%d data=%p)\n",
+                     id, source, data);
+        std::fflush(stderr);
+        std::abort();
+    }
     std::lock_guard lock(events->mutex);
     events->received.emplace_back(id, id == EventWarning ? *static_cast<std::int32_t*>(data) : 0);
 }
