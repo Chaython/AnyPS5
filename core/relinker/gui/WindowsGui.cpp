@@ -161,6 +161,7 @@ void BrowseOutput() {
 struct ConversionResult {
     DWORD exitCode = static_cast<DWORD>(-1);
     std::wstring log;
+    bool runtimeWarning = false;
 };
 
 ConversionResult RunRelinker(
@@ -255,6 +256,44 @@ ConversionResult RunRelinker(
     return result;
 }
 
+std::wstring StageBundledRuntimeLibraries(const std::wstring& output, bool& warning) {
+    namespace fs = std::filesystem;
+    const fs::path source = ExecutableDirectory() / L"libs";
+    if (!fs::is_directory(source)) {
+        warning = true;
+        return L"\r\nWARNING: Bundled runtime libraries were not found. "
+               L"Copy the appropriate libs folder next to the translated executable.\r\n";
+    }
+
+    const fs::path destination = fs::absolute(fs::path(output)).parent_path() / L"libs";
+    std::error_code sameError;
+    if (fs::equivalent(source, destination, sameError) && !sameError)
+        return L"\r\nRuntime libraries are already alongside the output.\r\n";
+
+    fs::create_directories(destination);
+    std::size_t copied = 0;
+    std::size_t present = 0;
+    for (const auto& entry : fs::directory_iterator(source)) {
+        if (!entry.is_regular_file()) continue;
+        const auto extension = entry.path().extension().wstring();
+        if (extension != L".prx" && extension != L".dll") continue;
+        ++present;
+        std::error_code copyError;
+        if (fs::copy_file(entry.path(), destination / entry.path().filename(),
+                          fs::copy_options::skip_existing, copyError)) ++copied;
+        if (copyError)
+            throw fs::filesystem_error("Failed to stage runtime library",
+                                       entry.path(), destination / entry.path().filename(), copyError);
+    }
+    if (present == 0) {
+        warning = true;
+        return L"\r\nWARNING: The bundled libs folder contains no runtime libraries.\r\n";
+    }
+    return L"\r\nRuntime libraries available in: " + destination.wstring() +
+           L" (new files copied: " + std::to_wstring(copied) + L").\r\n"
+           L"Existing runtime library files were not overwritten.\r\n";
+}
+
 void StartConversion() {
     if (g_running) return;
 
@@ -294,6 +333,15 @@ void StartConversion() {
         try {
             result = RunRelinker(input, output, guiSubsystem, diagnostics, toIntel,
                                  registry, lazyBinding, skipSyscall, skipSce, autorun);
+            if (result.exitCode == 0) {
+                try {
+                    result.log += StageBundledRuntimeLibraries(output, result.runtimeWarning);
+                } catch (const std::exception& error) {
+                    result.runtimeWarning = true;
+                    result.log += L"\r\nWARNING: Could not stage runtime libraries: " +
+                                  Utf8ToWide(error.what()) + L"\r\n";
+                }
+            }
         } catch (const std::exception& error) {
             result.log = L"Unexpected relinker error: " + Utf8ToWide(error.what());
         }
@@ -449,9 +497,15 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         if (result) {
             SetText(g_log, result->log.empty() ? L"(relinker produced no output)" : result->log);
             if (result->exitCode == 0) {
-                SetText(g_status, L"Conversion completed successfully.");
                 EnableWindow(g_openFolder, TRUE);
-                MessageBoxW(g_window, L"Conversion completed successfully.", L"AnyPS5", MB_OK | MB_ICONINFORMATION);
+                if (result->runtimeWarning) {
+                    SetText(g_status, L"Conversion finished; runtime libraries need attention.");
+                    MessageBoxW(g_window, L"Conversion completed, but runtime libraries could not be fully staged. See the log.",
+                                L"AnyPS5", MB_OK | MB_ICONWARNING);
+                } else {
+                    SetText(g_status, L"Conversion completed successfully.");
+                    MessageBoxW(g_window, L"Conversion completed successfully.", L"AnyPS5", MB_OK | MB_ICONINFORMATION);
+                }
             } else {
                 SetText(g_status, L"Conversion failed. See the log below.");
                 MessageBoxW(g_window, L"Conversion failed. See the relinker output in the window.", L"AnyPS5", MB_OK | MB_ICONERROR);

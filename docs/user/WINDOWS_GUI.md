@@ -6,6 +6,7 @@ This optional, Windows-only GUI is a frontend for the upstream AnyPS5 **relinker
 1. Download a Windows GUI bundle from this fork's **Windows GUI Bundle** workflow artifacts, or build from source.
 2. Keep `AnyPS5.exe` and `relinker.exe` together. Keep the `libs` folder from the bundle; it contains open-source runtime providers needed by translated executables.
 3. Run `AnyPS5.exe`, browse for an eligible PS5 executable, choose an output `.exe`, and click **Convert**.
+   After a successful conversion, the GUI copies bundled `.prx` and `.dll` runtime files into a `libs` folder beside the chosen output, without overwriting existing files. If libraries are absent or copying fails, the GUI displays a warning; the translated executable alone is not sufficient to run a game.
 4. Read the relinker output in the GUI. Successful conversion does not guarantee a game can start or run correctly.
 
 The GUI forwards upstream's `--windows` plus selected supported options: `--windows-gui`, `--windows-diagnostics`, `--to-intel`, `--registry`, `--lazy-binding`, `--skip-syscall-check`, `--skip-sce-module`, and `--autorun`. Leave advanced skips off unless debugging a specific title. The obsolete fork-only compatibility-report option is intentionally omitted.
