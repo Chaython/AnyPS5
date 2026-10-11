@@ -289,6 +289,7 @@ jobs:
       - shell: cmd
         run: cmake --build build --target libs
       - name: Stage matching MinGW runtimes for PRX loading
+        shell: bash
         run: |
           set -euo pipefail
           for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do

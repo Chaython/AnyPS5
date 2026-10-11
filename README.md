@@ -6,9 +6,9 @@ Includes a [relinker](core/relinker) that converts executable to the target syst
 
 [Usage](docs/user/USAGE.md), [Build instructions](docs/dev/BUILD.md), [Architecture](docs/dev/ARCHITECTURE.md), [Technical debt of the project](docs/dev/TechnicalDebt.md), [code style conventions](docs/dev/CONVENTIONS.md), [contributing](CONTRIBUTING.md)
 
-## Windows graphical converter (fork)
+## Windows converter (fork)
 
-This fork optionally builds a standalone Windows converter GUI (`AnyPS5.exe`) that runs upstream's `relinker.exe`. See [Windows GUI usage and limitations](docs/user/WINDOWS_GUI.md). This does not change the relinker or claim additional game compatibility.
+This fork provides an optional Windows-native GUI (`AnyPS5.exe`) with adaptive Windows accent/dark/light themes and automatic preparation of supported unencrypted SELF executables and guest modules. It uses upstream's `relinker.exe` and does not replace the game runtime. See [Windows GUI usage](docs/user/WINDOWS_GUI.md).
 
 ## Status
 
