@@ -1,12 +1,19 @@
 #define UNICODE
 #define _UNICODE
 #define WIN32_LEAN_AND_MEAN
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00
+#endif
 #include <windows.h>
 #include <commdlg.h>
 #include <shellapi.h>
+#include <dwmapi.h>
+#include <uxtheme.h>
 
 #include "SelfExtractor.hpp"
 
+#include <algorithm>
+#include <cwchar>
 #include <exception>
 #include <filesystem>
 #include <string>
@@ -15,6 +22,15 @@
 
 namespace {
 
+constexpr int ID_KICKER = 1100;
+constexpr int ID_TITLE = 1101;
+constexpr int ID_SUBTITLE = 1102;
+constexpr int ID_INPUT_LABEL = 1103;
+constexpr int ID_OUTPUT_LABEL = 1104;
+constexpr int ID_OPTIONS_LABEL = 1105;
+constexpr int ID_OPTIONS_HINT = 1106;
+constexpr int ID_LOG_LABEL = 1107;
+constexpr int ID_STATUS_LABEL = 1108;
 constexpr int ID_INPUT = 1001;
 constexpr int ID_INPUT_BROWSE = 1002;
 constexpr int ID_OUTPUT = 1003;
@@ -41,6 +57,224 @@ HWND g_openFolder = nullptr;
 HWND g_status = nullptr;
 HWND g_log = nullptr;
 bool g_running = false;
+
+struct WindowsPalette {
+    bool dark = false;
+    UINT dpi = 96;
+    COLORREF background = RGB(245, 247, 250);
+    COLORREF panel = RGB(255, 255, 255);
+    COLORREF field = RGB(246, 248, 251);
+    COLORREF foreground = RGB(25, 31, 43);
+    COLORREF muted = RGB(91, 102, 118);
+    COLORREF accent = RGB(0, 120, 215);
+    COLORREF accentText = RGB(255, 255, 255);
+    HBRUSH backgroundBrush = nullptr;
+    HBRUSH panelBrush = nullptr;
+    HBRUSH fieldBrush = nullptr;
+    HFONT bodyFont = nullptr;
+    HFONT titleFont = nullptr;
+    HFONT headingFont = nullptr;
+};
+
+WindowsPalette g_palette;
+int S(int n) { return MulDiv(n, static_cast<int>(g_palette.dpi), 96); }
+
+void DeleteThemeResources() {
+    for (HBRUSH brush : {g_palette.backgroundBrush, g_palette.panelBrush, g_palette.fieldBrush})
+        if (brush) DeleteObject(brush);
+    for (HFONT font : {g_palette.bodyFont, g_palette.titleFont, g_palette.headingFont})
+        if (font) DeleteObject(font);
+    g_palette.backgroundBrush = g_palette.panelBrush = g_palette.fieldBrush = nullptr;
+    g_palette.bodyFont = g_palette.titleFont = g_palette.headingFont = nullptr;
+}
+
+HFONT MakeFont(int height, int weight) {
+    return CreateFontW(-S(height), 0, 0, 0, weight, FALSE, FALSE, FALSE,
+                       DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                       CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+}
+
+bool WindowsAppsUseDarkMode() {
+    DWORD value = 1;
+    DWORD size = sizeof(value);
+    const LSTATUS status = RegGetValueW(HKEY_CURRENT_USER,
+        L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &value, &size);
+    return status == ERROR_SUCCESS && value == 0;
+}
+
+void ReadWindowsPalette() {
+    g_palette.dark = WindowsAppsUseDarkMode();
+    g_palette.dpi = g_window ? GetDpiForWindow(g_window) : 96;
+    if (!g_palette.dpi) g_palette.dpi = 96;
+    if (g_palette.dark) {
+        g_palette.background = RGB(17, 20, 26);
+        g_palette.panel = RGB(29, 33, 41);
+        g_palette.field = RGB(38, 44, 54);
+        g_palette.foreground = RGB(238, 241, 246);
+        g_palette.muted = RGB(171, 184, 200);
+    } else {
+        g_palette.background = RGB(244, 247, 251);
+        g_palette.panel = RGB(255, 255, 255);
+        g_palette.field = RGB(247, 249, 252);
+        g_palette.foreground = RGB(24, 35, 53);
+        g_palette.muted = RGB(96, 107, 124);
+    }
+    DWORD colorization = 0;
+    BOOL opaque = FALSE;
+    if (SUCCEEDED(DwmGetColorizationColor(&colorization, &opaque))) {
+        g_palette.accent = RGB((colorization >> 16) & 255, (colorization >> 8) & 255,
+                               colorization & 255);
+    } else {
+        g_palette.accent = GetSysColor(COLOR_HIGHLIGHT);
+    }
+    const int brightness = 299 * GetRValue(g_palette.accent) +
+                           587 * GetGValue(g_palette.accent) +
+                           114 * GetBValue(g_palette.accent);
+    g_palette.accentText = brightness > 155000 ? RGB(14, 21, 31) : RGB(255, 255, 255);
+    g_palette.backgroundBrush = CreateSolidBrush(g_palette.background);
+    g_palette.panelBrush = CreateSolidBrush(g_palette.panel);
+    g_palette.fieldBrush = CreateSolidBrush(g_palette.field);
+    g_palette.bodyFont = MakeFont(15, FW_NORMAL);
+    g_palette.headingFont = MakeFont(16, FW_SEMIBOLD);
+    g_palette.titleFont = MakeFont(28, FW_SEMIBOLD);
+}
+
+BOOL CALLBACK ThemeChild(HWND child, LPARAM) {
+    const int id = GetDlgCtrlID(child);
+    const HFONT font = id == ID_TITLE ? g_palette.titleFont :
+        (id == ID_KICKER || id == ID_OPTIONS_LABEL || id == ID_LOG_LABEL)
+            ? g_palette.headingFont : g_palette.bodyFont;
+    SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+    wchar_t className[32]{};
+    GetClassNameW(child, className, 32);
+    if (wcscmp(className, L"Button") == 0 || wcscmp(className, L"Edit") == 0) {
+        SetWindowTheme(child, g_palette.dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
+    }
+    InvalidateRect(child, nullptr, TRUE);
+    return TRUE;
+}
+
+void RefreshWindowsTheme() {
+    DeleteThemeResources();
+    ReadWindowsPalette();
+    const BOOL dark = g_palette.dark ? TRUE : FALSE;
+    if (FAILED(DwmSetWindowAttribute(g_window, 20, &dark, sizeof(dark))))
+        DwmSetWindowAttribute(g_window, 19, &dark, sizeof(dark));
+    EnumChildWindows(g_window, ThemeChild, 0);
+    RedrawWindow(g_window, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_ERASE);
+}
+
+void MoveControl(int id, int x, int y, int width, int height) {
+    const HWND control = GetDlgItem(g_window, id);
+    if (control) MoveWindow(control, S(x), S(y), S(std::max(width, 1)),
+                            S(std::max(height, 1)), TRUE);
+}
+
+void LayoutControls() {
+    if (!g_window) return;
+    RECT client{};
+    GetClientRect(g_window, &client);
+    const int w = MulDiv(client.right - client.left, 96, static_cast<int>(g_palette.dpi));
+    const int h = MulDiv(client.bottom - client.top, 96, static_cast<int>(g_palette.dpi));
+    if (w < 540 || h < 600) return;
+    MoveControl(ID_KICKER, 43, 22, w - 80, 25);
+    MoveControl(ID_TITLE, 43, 51, w - 80, 42);
+    MoveControl(ID_SUBTITLE, 43, 99, w - 80, 24);
+    MoveControl(ID_INPUT_LABEL, 45, 143, w - 90, 22);
+    MoveControl(ID_INPUT, 45, 165, w - 213, 34);
+    MoveControl(ID_INPUT_BROWSE, w - 151, 165, 104, 35);
+    MoveControl(ID_OUTPUT_LABEL, 45, 210, w - 90, 22);
+    MoveControl(ID_OUTPUT, 45, 230, w - 213, 34);
+    MoveControl(ID_OUTPUT_BROWSE, w - 151, 230, 104, 35);
+    MoveControl(ID_OPTIONS_LABEL, 45, 304, w - 90, 25);
+    const int right = std::max(w / 2, 390);
+    const int rightWidth = std::max(140, w - right - 53);
+    for (const auto& control : {
+        std::pair{ID_GUI_SUBSYSTEM, 0}, {ID_DIAGNOSTICS, 1},
+        {ID_TO_INTEL, 2}, {ID_REGISTRY, 3} }) {
+        MoveControl(control.first, 47, 341 + control.second * 31, right - 70, 25);
+    }
+    for (const auto& control : {
+        std::pair{ID_LAZY_BINDING, 0}, {ID_SKIP_SYSCALL, 1},
+        {ID_SKIP_SCE, 2}, {ID_AUTORUN, 3} }) {
+        MoveControl(control.first, right, 341 + control.second * 31, rightWidth, 25);
+    }
+    MoveControl(ID_OPTIONS_HINT, 47, 468, w - 94, 25);
+    MoveControl(ID_CONVERT, 25, 526, 145, 43);
+    MoveControl(ID_OPEN_FOLDER, 185, 526, 158, 43);
+    MoveControl(ID_STATUS_LABEL, 363, 538, 62, 24);
+    MoveControl(ID_STATUS, 425, 538, w - 460, 26);
+    MoveControl(ID_LOG_LABEL, 45, 598, w - 90, 25);
+    MoveControl(ID_LOG, 45, 627, w - 90, std::max(65, h - 651));
+}
+
+HBRUSH PanelForControl(HWND control) {
+    const int id = GetDlgCtrlID(control);
+    if (id == ID_KICKER || id == ID_TITLE || id == ID_SUBTITLE ||
+        id == ID_STATUS_LABEL || id == ID_STATUS)
+        return g_palette.backgroundBrush;
+    POINT location{};
+    MapWindowPoints(control, g_window, &location, 1);
+    return location.y >= S(126) ? g_palette.panelBrush : g_palette.backgroundBrush;
+}
+
+void DrawCard(HDC dc, int x, int y, int width, int height) {
+    if (height <= 0) return;
+    const COLORREF border = g_palette.dark ? RGB(50, 58, 70) : RGB(224, 231, 241);
+    const HPEN pen = CreatePen(PS_SOLID, std::max(1, S(1)), border);
+    const HGDIOBJ oldPen = SelectObject(dc, pen);
+    const HGDIOBJ oldBrush = SelectObject(dc, g_palette.panelBrush);
+    RoundRect(dc, S(x), S(y), S(x + width), S(y + height), S(16), S(16));
+    SelectObject(dc, oldBrush);
+    SelectObject(dc, oldPen);
+    DeleteObject(pen);
+}
+
+void PaintShell(HDC dc) {
+    RECT client{};
+    GetClientRect(g_window, &client);
+    FillRect(dc, &client, g_palette.backgroundBrush);
+    const int width = MulDiv(client.right, 96, static_cast<int>(g_palette.dpi));
+    const int height = MulDiv(client.bottom, 96, static_cast<int>(g_palette.dpi));
+    RECT stripe{S(25), S(27), S(31), S(109)};
+    HBRUSH accent = CreateSolidBrush(g_palette.accent);
+    FillRect(dc, &stripe, accent);
+    DeleteObject(accent);
+    DrawCard(dc, 24, 131, width - 48, 148);
+    DrawCard(dc, 24, 290, width - 48, 213);
+    DrawCard(dc, 24, 582, width - 48, height - 604);
+}
+
+void PaintPrimaryButton(const DRAWITEMSTRUCT* item) {
+    HDC dc = item->hDC;
+    RECT rect = item->rcItem;
+    const bool disabled = (item->itemState & ODS_DISABLED) != 0;
+    const bool pressed = (item->itemState & ODS_SELECTED) != 0;
+    const COLORREF fill = disabled ? g_palette.muted : g_palette.accent;
+    const COLORREF text = disabled ? g_palette.panel : g_palette.accentText;
+    HBRUSH brush = CreateSolidBrush(fill);
+    HPEN pen = CreatePen(PS_SOLID, 1, fill);
+    HGDIOBJ oldBrush = SelectObject(dc, brush);
+    HGDIOBJ oldPen = SelectObject(dc, pen);
+    RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, S(13), S(13));
+    SelectObject(dc, oldPen);
+    SelectObject(dc, oldBrush);
+    DeleteObject(pen);
+    DeleteObject(brush);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, text);
+    HGDIOBJ font = SelectObject(dc, g_palette.headingFont);
+    if (pressed) OffsetRect(&rect, 0, S(1));
+    DrawTextW(dc, L"Convert to Windows", -1, &rect,
+              DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(dc, font);
+    if (item->itemState & ODS_FOCUS) {
+        InflateRect(&rect, -S(4), -S(4));
+        DrawFocusRect(dc, &rect);
+    }
+}
+
 
 std::wstring GetText(HWND control) {
     const int length = GetWindowTextLengthW(control);
@@ -456,83 +690,76 @@ HWND AddControl(
 }
 
 void CreateControls() {
-    AddControl(0, L"STATIC", L"PS5 executable:", WS_CHILD | WS_VISIBLE,
-               18, 20, 112, 22, 0);
+    AddControl(0, L"STATIC", L"ANYPS5  /  CONVERTER",
+               WS_CHILD | WS_VISIBLE | SS_LEFT, 0, 0, 0, 0, ID_KICKER);
+    AddControl(0, L"STATIC", L"PS5 to Windows",
+               WS_CHILD | WS_VISIBLE | SS_LEFT, 0, 0, 0, 0, ID_TITLE);
+    AddControl(0, L"STATIC", L"Convert an executable and prepare supported SELF modules automatically.",
+               WS_CHILD | WS_VISIBLE | SS_LEFT, 0, 0, 0, 0, ID_SUBTITLE);
+    AddControl(0, L"STATIC", L"SOURCE  /  ELF OR SELF",
+               WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, ID_INPUT_LABEL);
     g_input = AddControl(WS_EX_CLIENTEDGE, L"EDIT", L"",
                          WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                         130, 17, 530, 25, ID_INPUT);
+                         0, 0, 0, 0, ID_INPUT);
     AddControl(0, L"BUTTON", L"Browse...",
                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-               670, 16, 88, 27, ID_INPUT_BROWSE);
-
-    AddControl(0, L"STATIC", L"Output .exe:", WS_CHILD | WS_VISIBLE,
-               18, 57, 112, 22, 0);
+               0, 0, 0, 0, ID_INPUT_BROWSE);
+    AddControl(0, L"STATIC", L"DESTINATION  /  WINDOWS EXECUTABLE",
+               WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, ID_OUTPUT_LABEL);
     g_output = AddControl(WS_EX_CLIENTEDGE, L"EDIT", L"",
                           WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                          130, 54, 530, 25, ID_OUTPUT);
+                          0, 0, 0, 0, ID_OUTPUT);
     AddControl(0, L"BUTTON", L"Browse...",
                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-               670, 53, 88, 27, ID_OUTPUT_BROWSE);
-
-    AddControl(0, L"BUTTON", L"Conversion options",
-               WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-               18, 94, 740, 177, 0);
-
-    AddControl(0, L"BUTTON", L"GUI subsystem for translated game (no console window)",
+               0, 0, 0, 0, ID_OUTPUT_BROWSE);
+    AddControl(0, L"STATIC", L"CONVERSION OPTIONS",
+               WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, ID_OPTIONS_LABEL);
+    AddControl(0, L"BUTTON", L"Hide translated game console (GUI mode)",
                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-               34, 119, 350, 23, ID_GUI_SUBSYSTEM);
+               0, 0, 0, 0, ID_GUI_SUBSYSTEM);
     AddControl(0, L"BUTTON", L"Windows dependency diagnostics",
                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-               34, 148, 260, 23, ID_DIAGNOSTICS);
-    AddControl(0, L"BUTTON", L"Intel compatibility lowering",
+               0, 0, 0, 0, ID_DIAGNOSTICS);
+    AddControl(0, L"BUTTON", L"Intel instruction compatibility",
                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-               34, 177, 260, 23, ID_TO_INTEL);
+               0, 0, 0, 0, ID_TO_INTEL);
     AddControl(0, L"BUTTON", L"Write registry JSON",
                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-               34, 206, 260, 23, ID_REGISTRY);
-
+               0, 0, 0, 0, ID_REGISTRY);
     AddControl(0, L"BUTTON", L"Lazy binding",
                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-               405, 119, 180, 23, ID_LAZY_BINDING);
-    AddControl(0, L"BUTTON", L"Skip syscall check",
+               0, 0, 0, 0, ID_LAZY_BINDING);
+    AddControl(0, L"BUTTON", L"Skip syscall validation",
                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-               405, 148, 180, 23, ID_SKIP_SYSCALL);
-    AddControl(0, L"BUTTON", L"Skip sce_module (advanced)",
+               0, 0, 0, 0, ID_SKIP_SYSCALL);
+    AddControl(0, L"BUTTON", L"Skip guest modules (advanced)",
                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-               405, 177, 220, 23, ID_SKIP_SCE);
-    AddControl(0, L"BUTTON", L"Run translated game after conversion",
+               0, 0, 0, 0, ID_SKIP_SCE);
+    AddControl(0, L"BUTTON", L"Run after conversion",
                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-               405, 206, 270, 23, ID_AUTORUN);
-
-    // Keep a console visible by default while translated runtime support is
-    // experimental, so startup/import failures cannot disappear silently.
+               0, 0, 0, 0, ID_AUTORUN);
+    AddControl(0, L"STATIC", L"Plain SELF files are prepared automatically. Advanced skips are normally unnecessary.",
+               WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, ID_OPTIONS_HINT);
     SendDlgItemMessageW(g_window, ID_DIAGNOSTICS, BM_SETCHECK, BST_CHECKED, 0);
-
-    AddControl(0, L"STATIC",
-               L"Windows output is automatic. Leave 'Skip sce_module' off unless a title specifically requires it.",
-               WS_CHILD | WS_VISIBLE,
-               405, 237, 330, 26, 0);
-
-    g_convert = AddControl(0, L"BUTTON", L"Convert",
-                           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-                           18, 286, 105, 34, ID_CONVERT);
+    g_convert = AddControl(0, L"BUTTON", L"Convert to Windows",
+                           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
+                           0, 0, 0, 0, ID_CONVERT);
     g_openFolder = AddControl(0, L"BUTTON", L"Open output folder",
                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                              133, 286, 150, 34, ID_OPEN_FOLDER);
+                              0, 0, 0, 0, ID_OPEN_FOLDER);
     EnableWindow(g_openFolder, FALSE);
-
-    AddControl(0, L"STATIC", L"Status:", WS_CHILD | WS_VISIBLE,
-               305, 294, 50, 22, 0);
+    AddControl(0, L"STATIC", L"STATUS",
+               WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, ID_STATUS_LABEL);
     g_status = AddControl(0, L"STATIC", L"Ready",
-                          WS_CHILD | WS_VISIBLE,
-                          358, 294, 400, 22, ID_STATUS);
-
-    AddControl(0, L"STATIC", L"Relinker output:", WS_CHILD | WS_VISIBLE,
-               18, 336, 120, 22, 0);
+                          WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, ID_STATUS);
+    AddControl(0, L"STATIC", L"CONVERSION LOG",
+               WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, ID_LOG_LABEL);
     g_log = AddControl(WS_EX_CLIENTEDGE, L"EDIT", L"",
-                       WS_CHILD | WS_VISIBLE | WS_VSCROLL |
+                       WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_TABSTOP |
                        ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,
-                       18, 358, 740, 244, ID_LOG);
+                       0, 0, 0, 0, ID_LOG);
+    RefreshWindowsTheme();
+    LayoutControls();
 }
 
 LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -541,6 +768,66 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         g_window = window;
         CreateControls();
         return 0;
+    case WM_SIZE:
+        LayoutControls();
+        return 0;
+    case WM_GETMINMAXINFO: {
+        auto* limits = reinterpret_cast<MINMAXINFO*>(lParam);
+        limits->ptMinTrackSize.x = S(815);
+        limits->ptMinTrackSize.y = S(735);
+        return 0;
+    }
+    case WM_DPICHANGED: {
+        const auto* suggested = reinterpret_cast<const RECT*>(lParam);
+        SetWindowPos(window, nullptr, suggested->left, suggested->top,
+                     suggested->right - suggested->left,
+                     suggested->bottom - suggested->top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        RefreshWindowsTheme();
+        LayoutControls();
+        return 0;
+    }
+    case WM_THEMECHANGED:
+    case WM_SETTINGCHANGE:
+    case WM_DWMCOLORIZATIONCOLORCHANGED:
+        RefreshWindowsTheme();
+        return 0;
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps{};
+        const HDC dc = BeginPaint(window, &ps);
+        PaintShell(dc);
+        EndPaint(window, &ps);
+        return 0;
+    }
+    case WM_CTLCOLORSTATIC:
+    case WM_CTLCOLORBTN: {
+        const HDC dc = reinterpret_cast<HDC>(wParam);
+        const HWND control = reinterpret_cast<HWND>(lParam);
+        SetTextColor(dc, GetDlgCtrlID(control) == ID_KICKER ||
+                         GetDlgCtrlID(control) == ID_SUBTITLE ||
+                         GetDlgCtrlID(control) == ID_OPTIONS_HINT ||
+                         GetDlgCtrlID(control) == ID_STATUS_LABEL
+                         ? g_palette.muted : g_palette.foreground);
+        const HBRUSH brush = PanelForControl(control);
+        SetBkColor(dc, brush == g_palette.panelBrush ? g_palette.panel : g_palette.background);
+        return reinterpret_cast<LRESULT>(brush);
+    }
+    case WM_CTLCOLOREDIT: {
+        const HDC dc = reinterpret_cast<HDC>(wParam);
+        SetTextColor(dc, g_palette.foreground);
+        SetBkColor(dc, g_palette.field);
+        return reinterpret_cast<LRESULT>(g_palette.fieldBrush);
+    }
+    case WM_DRAWITEM: {
+        const auto* item = reinterpret_cast<const DRAWITEMSTRUCT*>(lParam);
+        if (item && item->CtlID == ID_CONVERT) {
+            PaintPrimaryButton(item);
+            return TRUE;
+        }
+        break;
+    }
 
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
@@ -598,6 +885,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         return 0;
 
     case WM_DESTROY:
+        DeleteThemeResources();
         g_window = nullptr;
         PostQuitMessage(0);
         return 0;
@@ -609,6 +897,12 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
 } // namespace
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int showCommand) {
+    using SetDpiAwareness = BOOL (WINAPI*)(HANDLE);
+    const auto user32 = GetModuleHandleW(L"user32.dll");
+    const auto setDpi = user32 ? reinterpret_cast<SetDpiAwareness>(
+        GetProcAddress(user32, "SetProcessDpiAwarenessContext")) : nullptr;
+    if (!setDpi || !setDpi(reinterpret_cast<HANDLE>(static_cast<INT_PTR>(-4))))
+        SetProcessDPIAware();
     constexpr wchar_t ClassName[] = L"AnyPS5ConverterWindow";
 
     WNDCLASSEXW windowClass{};
@@ -629,8 +923,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int showCommand) {
         0,
         ClassName,
         L"AnyPS5 - PS5 to Windows Converter",
-        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, 795, 655,
+        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+        CW_USEDEFAULT, CW_USEDEFAULT, 930, 800,
         nullptr, nullptr, instance, nullptr);
 
     if (!window) {
