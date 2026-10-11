@@ -1,6 +1,7 @@
 #define UNICODE
 #define _UNICODE
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0A00
 #endif
@@ -15,6 +16,7 @@
 #include <algorithm>
 #include <cwchar>
 #include <exception>
+#include <utility>
 #include <filesystem>
 #include <string>
 #include <thread>
@@ -805,6 +807,11 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
     case WM_CTLCOLORBTN: {
         const HDC dc = reinterpret_cast<HDC>(wParam);
         const HWND control = reinterpret_cast<HWND>(lParam);
+        if (GetDlgCtrlID(control) == ID_LOG) {
+            SetTextColor(dc, g_palette.foreground);
+            SetBkColor(dc, g_palette.field);
+            return reinterpret_cast<LRESULT>(g_palette.fieldBrush);
+        }
         SetTextColor(dc, GetDlgCtrlID(control) == ID_KICKER ||
                          GetDlgCtrlID(control) == ID_SUBTITLE ||
                          GetDlgCtrlID(control) == ID_OPTIONS_HINT ||
