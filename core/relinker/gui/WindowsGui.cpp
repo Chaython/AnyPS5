@@ -5,6 +5,8 @@
 #include <commdlg.h>
 #include <shellapi.h>
 
+#include "SelfExtractor.hpp"
+
 #include <exception>
 #include <filesystem>
 #include <string>
@@ -294,6 +296,70 @@ std::wstring StageBundledRuntimeLibraries(const std::wstring& output, bool& warn
            L"Existing runtime library files were not overwritten.\r\n";
 }
 
+struct TemporaryElfWorkspace {
+    std::filesystem::path directory;
+    ~TemporaryElfWorkspace() {
+        if (directory.empty()) return;
+        std::error_code ignored;
+        std::filesystem::remove_all(directory, ignored);
+    }
+    void Create() {
+        wchar_t temp[32768]{}, name[MAX_PATH]{};
+        const auto length=GetTempPathW(static_cast<DWORD>(std::size(temp)),temp);
+        if(!length || length>=std::size(temp) || !GetTempFileNameW(temp,L"APS",0,name))
+            throw std::runtime_error("Cannot create a temporary SELF workspace");
+        std::filesystem::remove(name);
+        directory=name;
+        std::filesystem::create_directory(directory);
+    }
+};
+
+std::filesystem::path PrepareElfInputs(const std::filesystem::path& selected, bool skipModules,
+                                       TemporaryElfWorkspace& work, std::wstring& log) {
+    namespace fs=std::filesystem;
+    const fs::path input=fs::absolute(selected), root=input.parent_path();
+    const auto kind=GuiSelf::Detect(input);
+    if(kind==GuiSelf::Kind::Other) throw std::runtime_error("Selected executable is neither ELF nor SELF");
+    bool needsExtraction=kind==GuiSelf::Kind::Self;
+    std::vector<fs::path> modules;
+    if(!skipModules) {
+        for(const auto* name:{L"sce_module",L"sce_modules",L"prx"}) {
+            const auto dir=root/name;
+            if(!fs::exists(dir)) continue;
+            if(!fs::is_directory(dir)) throw std::runtime_error("Guest module path is not a directory: "+dir.string());
+            for(const auto& entry:fs::recursive_directory_iterator(dir)) {
+                if(!entry.is_regular_file() || entry.is_symlink()) continue;
+                modules.push_back(entry.path());
+                if(GuiSelf::Detect(entry.path())==GuiSelf::Kind::Self) needsExtraction=true;
+            }
+        }
+    }
+    if(!needsExtraction) return input;
+    work.Create();
+    std::size_t converted=0;
+    const auto stageFile=[&](const fs::path& from,const fs::path& to) {
+        fs::create_directories(to.parent_path());
+        if(GuiSelf::Detect(from)==GuiSelf::Kind::Self) {
+            try { GuiSelf::Extract(from,to); }
+            catch(const std::exception& error) { throw std::runtime_error(from.string()+": "+error.what()); }
+            ++converted;
+        } else {
+            fs::copy_file(from,to,fs::copy_options::none);
+        }
+    };
+    const fs::path prepared=work.directory/input.filename();
+    stageFile(input,prepared);
+    for(const auto& module:modules) {
+        const auto relative=fs::relative(module,root);
+        if(relative.empty() || *relative.begin()=="..")
+            throw std::runtime_error("Module path escapes the game directory");
+        stageFile(module,work.directory/relative);
+    }
+    log=L"Automatically prepared "+std::to_wstring(converted)+
+        L" unencrypted SELF file(s) as ELF. Original files were not modified.\r\n";
+    return prepared;
+}
+
 void StartConversion() {
     if (g_running) return;
 
@@ -331,8 +397,12 @@ void StartConversion() {
     std::thread([=] {
         ConversionResult result;
         try {
-            result = RunRelinker(input, output, guiSubsystem, diagnostics, toIntel,
-                                 registry, lazyBinding, skipSyscall, skipSce, autorun);
+            TemporaryElfWorkspace workspace;
+            std::wstring preparation;
+            const auto prepared=PrepareElfInputs(input,skipSce,workspace,preparation);
+            result=RunRelinker(prepared.wstring(),output,guiSubsystem,diagnostics,toIntel,
+                               registry,lazyBinding,skipSyscall,skipSce,autorun);
+            result.log=preparation+result.log;
             if (result.exitCode == 0) {
                 try {
                     result.log += StageBundledRuntimeLibraries(output, result.runtimeWarning);
@@ -343,7 +413,7 @@ void StartConversion() {
                 }
             }
         } catch (const std::exception& error) {
-            result.log = L"Unexpected relinker error: " + Utf8ToWide(error.what());
+            result.log = L"Input preparation or relinker error: " + Utf8ToWide(error.what());
         }
         auto* heapResult = new ConversionResult(std::move(result));
         if (!PostMessageW(targetWindow, WM_CONVERSION_FINISHED, 0, reinterpret_cast<LPARAM>(heapResult))) {
