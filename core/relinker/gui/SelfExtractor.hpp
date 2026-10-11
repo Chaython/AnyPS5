@@ -56,7 +56,9 @@ inline void Extract(const fs::path& source, const fs::path& target) {
     Read(f,elfbase,eh.data(),eh.size());
     if(U32(eh.data())!=0x464c457f || eh[4]!=2 || eh[5]!=1 || eh[6]!=1 || U16(eh.data()+18)!=62 || U32(eh.data()+20)!=1)
         throw std::runtime_error("SELF does not embed supported ELF64 x86-64");
-    const auto phoff=U64(eh.data()+32), phsize=U16(eh.data()+54), phcount=U16(eh.data()+56);
+    const auto phoff=U64(eh.data()+32);
+    const auto phsize=U16(eh.data()+54);
+    const auto phcount=U16(eh.data()+56);
     if(phsize!=56 || phcount==0 || phcount>4096 || phoff<64 || phoff>(4ull<<20))
         throw std::runtime_error("Invalid ELF program header table");
     const auto phbytes=phoff+std::uint64_t(phsize)*phcount;
