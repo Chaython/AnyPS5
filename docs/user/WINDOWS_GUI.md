@@ -1,6 +1,6 @@
 # Windows graphical converter (fork)
 
-This optional, Windows-only GUI is a frontend for the upstream AnyPS5 **relinker**, not a replacement or emulator.
+This optional, Windows-only GUI is a frontend for the upstream AnyPS5 **relinker**, not a replacement or emulator. The interface follows Windows' **app light/dark theme and accent color** automatically. Theme changes are picked up without restarting, and the interface supports DPI scaling and resizing. Its appearance uses native Windows controls (not a web runtime).
 
 ## Usage
 1. Download a Windows GUI bundle from this fork's **Windows GUI Bundle** workflow artifacts, or build from source.
