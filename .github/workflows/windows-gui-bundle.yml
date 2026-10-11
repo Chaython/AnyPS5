@@ -44,6 +44,10 @@ jobs:
         run: echo 'C:\winlibs\mingw64\bin' >> "$GITHUB_PATH"
       - name: Configure Windows build
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+      - name: Build GUI and SELF smoke tests first
+        run: |
+          cmake --build build --target anyps5_gui gui_self_extractor_tests --parallel 3
+          ctest --test-dir build -R gui_self_extractor --output-on-failure --timeout 30
       - name: Build Windows relinker, GUI, and libraries
         run: |
           cmake --build build --parallel 3
