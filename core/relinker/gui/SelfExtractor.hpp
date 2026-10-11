@@ -120,7 +120,7 @@ inline void Extract(const fs::path& source, const fs::path& target) {
     };
     for(const auto& c:parts) copy(c.from,c.to,c.size);
     if(tail) copy(declared,mappedEnd,tail);
-    if(end) { out.seekp(static_cast<std::streamoff>(end-1));out.put('\0'); }
+    if(end>mappedEnd+tail) { out.seekp(static_cast<std::streamoff>(end-1));out.put('\0'); }
     out.flush();
     if(!out) throw std::runtime_error("Could not complete ELF extraction");
 }
