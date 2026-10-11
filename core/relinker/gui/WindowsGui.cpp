@@ -329,8 +329,10 @@ std::filesystem::path PrepareElfInputs(const std::filesystem::path& selected, bo
             if(!fs::is_directory(dir)) throw std::runtime_error("Guest module path is not a directory: "+dir.string());
             for(const auto& entry:fs::recursive_directory_iterator(dir)) {
                 if(!entry.is_regular_file() || entry.is_symlink()) continue;
+                const auto entryKind=GuiSelf::Detect(entry.path());
+                if(entryKind==GuiSelf::Kind::Other) continue;
                 modules.push_back(entry.path());
-                if(GuiSelf::Detect(entry.path())==GuiSelf::Kind::Self) needsExtraction=true;
+                if(entryKind==GuiSelf::Kind::Self) needsExtraction=true;
             }
         }
     }
