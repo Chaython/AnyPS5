@@ -77,9 +77,16 @@ target_include_directories(relinker PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/relinker/include
 )
 
+if(BUILD_TESTING)
+    add_test_executable(gui_self_extractor_tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/tests/SelfExtractor.cpp)
+    add_test(NAME gui_self_extractor COMMAND gui_self_extractor_tests)
+endif()
+
 if(WIN32)
     add_executable(anyps5_gui WIN32
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/WindowsGui.cpp)
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/WindowsGui.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/SelfExtractor.hpp)
     set_target_properties(anyps5_gui PROPERTIES OUTPUT_NAME "AnyPS5")
     target_link_libraries(anyps5_gui PRIVATE comdlg32 shell32)
 endif()
