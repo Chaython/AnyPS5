@@ -71,12 +71,14 @@ int main() {
         Check(GuiSelf::Detect(source) == GuiSelf::Kind::Self, "SELF detection failed");
         GuiSelf::Extract(source, output);
         Check(GuiSelf::Detect(output) == GuiSelf::Kind::Elf, "ELF detection failed");
-        std::ifstream file(output, std::ios::binary | std::ios::ate);
-        Check(file.tellg() == std::streampos(0x207), "ELF file length incorrect");
-        std::array<char, 7> bytes{};
-        file.seekg(0x200);
-        file.read(bytes.data(), bytes.size());
-        Check(std::string(bytes.data(), bytes.size()) == "ELF!XYZ", "ELF segments/tail missing");
+        {
+            std::ifstream file(output, std::ios::binary | std::ios::ate);
+            Check(file.tellg() == std::streampos(0x207), "ELF file length incorrect");
+            std::array<char, 7> bytes{};
+            file.seekg(0x200);
+            file.read(bytes.data(), bytes.size());
+            Check(std::string(bytes.data(), bytes.size()) == "ELF!XYZ", "ELF segments/tail missing");
+        }
         Check(fs::file_size(source) == 0x147, "source was modified");
         Write(source, MakeSelf(0x2806));
         Check(Rejects(source, output), "encrypted SELF was accepted");
